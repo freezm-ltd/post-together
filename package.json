@@ -1,0 +1,25 @@
+{
+	"name": "@freezm-ltd/post-together",
+	"version": "0.0.1",
+	"type": "module",
+	"description": "Make postMessage easier",
+	"main": "index.js",
+	"scripts": {
+		"build": "tsc"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/freezm-ltd/post-together.git"
+	},
+	"keywords": [
+		"postmessage",
+		"message"
+	],
+	"author": "",
+	"license": "MIT",
+	"homepage": "https://github.com/freezm-ltd/post-together",
+	"devDependencies": {
+		"@types/serviceworker": "^0.0.89",
+		"typescript": "^5.5.3"
+	}
+}
