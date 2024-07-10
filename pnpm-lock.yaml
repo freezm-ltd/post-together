@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@freezm-ltd/event-target-2':
+        specifier: ^0.0.4
+        version: 0.0.4
     devDependencies:
       '@types/serviceworker':
         specifier: ^0.0.89
@@ -17,6 +21,9 @@ importers:
 
 packages:
 
+  '@freezm-ltd/event-target-2@0.0.4':
+    resolution: {integrity: sha512-2JsZ/Xz/w08ryPGBcbrR5igdFH6xJe8UiXD2wCcwBQzBWmHOQE4x146ka8PVqZDy2CEQRVgSceuM1zidObwRpg==}
+
   '@types/serviceworker@0.0.89':
     resolution: {integrity: sha512-m5C1oHqOeFemS026Mx19vYWbkygiDcKqHsd33dIgLDgfTlowHawZFIGzHmSbx7o5t57dTjaJcMxB8lpWXfkiBQ==}
 
@@ -26,6 +33,8 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@freezm-ltd/event-target-2@0.0.4': {}
 
   '@types/serviceworker@0.0.89': {}
 

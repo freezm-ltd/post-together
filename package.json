@@ -3,7 +3,10 @@
 	"version": "0.0.1",
 	"type": "module",
 	"description": "Make postMessage easier",
-	"main": "index.js",
+	"main": "src/index.js",
+	"files": [
+		"dist/**/*"
+	],
 	"scripts": {
 		"build": "tsc"
 	},
@@ -21,5 +24,8 @@
 	"devDependencies": {
 		"@types/serviceworker": "^0.0.89",
 		"typescript": "^5.5.3"
+	},
+	"dependencies": {
+		"@freezm-ltd/event-target-2": "^0.0.4"
 	}
 }
