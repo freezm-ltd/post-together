@@ -7,6 +7,7 @@ export type MessageEvent = CustomEvent<Message>
 export type MessageType = string
 export type MessageId = string // unique identifier for multiple messages
 export type MessagePayload = any
+export type MessagePayloadTranferable = [MessagePayload, Transferable[]] | [MessagePayload]
 function isMessageEvent(e: Event): e is MessageEvent {
     if ("data" in e) {
         const data = e.data as Message
@@ -17,19 +18,21 @@ function isMessageEvent(e: Event): e is MessageEvent {
 
 // message handler type
 export type MessageHandler = (payload: MessagePayload) => PromiseLike<MessagePayload> | MessagePayload
-export type MessageHandlerWrapper = (e: MessageEvent) => void
+export type MessageHandlerTransferable = (payload: MessagePayload) => PromiseLike<MessagePayloadTranferable> | MessagePayloadTranferable
+export type MessageHandlerWrapped = (e: MessageEvent) => void
 
 // message target types
 export type MessagePostable = ServiceWorker | Worker | Client | BroadcastChannel | MessagePort
 export type MessageListenable = ServiceWorkerContainer | Worker | BroadcastChannel | MessagePort
 export type SupportsTransferable = ServiceWorker | ServiceWorkerContainer | Worker | Client | MessagePort
-function isMessagePostable(target: any): target is MessagePostable {
+export function isMessagePostable(target: any): target is MessagePostable {
     return "postMessage" in target
 }
-function isMessageListenable(target: any): target is MessageListenable {
+export function isMessageListenable(target: any): target is MessageListenable {
     return "addEventListener" in target
 }
 
+// wrap message listener and dispatch custom message event as message type
 export class MessageListener extends EventTarget2 {
     constructor(
         readonly target: MessageListenable
@@ -41,6 +44,7 @@ export class MessageListener extends EventTarget2 {
     }
 }
 
+// simply wrap postMessage, without transferable
 export class MessagePoster extends EventTarget2 {
     constructor(
         readonly target: MessagePostable
@@ -53,6 +57,7 @@ export class MessagePoster extends EventTarget2 {
     }
 }
 
+// simply wrap postMessage, with transferable
 export class MessagePosterTransferable extends MessagePoster {
     constructor(
         readonly target: MessagePostable & SupportsTransferable
@@ -65,56 +70,87 @@ export class MessagePosterTransferable extends MessagePoster {
     }
 }
 
+// message target pair type
+export type MessageTargetPrecursorPair = { post: MessagePostable, listen: MessageListenable }
+export function isPrecursorPairEqual(pair1: MessageTargetPrecursorPair, pair2: MessageTargetPrecursorPair) {
+    return pair1.listen === pair2.listen && pair1.post && pair2.post
+}
+
+// message target without transferable
 export class MessageTarget {
-    private readonly poster: MessagePoster
-    private readonly listener: MessageListener
     constructor(
-        target: MessagePostable & MessageListenable,
-    )
-    constructor(
-        post: MessagePostable,
-        listen: MessageListenable,
-    )
-    constructor(
-        postOrTarget: MessagePostable | MessagePostable & MessageListenable,
-        listen?: MessageListenable,
-    ) {
-        this.poster = new MessagePoster(postOrTarget)
-        if (listen) {
-            this.listener = new MessageListener(listen)
-        } else if (isMessageListenable(postOrTarget)) {
-            this.listener = new MessageListener(postOrTarget)
-        } else {
-            throw new Error("Cannot initialize MessageTarget: listener not found or not supported")
-        }
-    }
+        protected readonly poster: MessagePoster,
+        protected readonly listener: MessageListener
+    ) { }
 
     // give message and get response
-    async send(type: MessageType, payload: MessagePayload, id = generateId()): Promise<MessagePayload> {
+    async send(type: MessageType, payload: MessagePayload): Promise<MessagePayload> {
         return new Promise(resolve => {
+            const id = generateId()
             const message = { id, type, payload }
             this.listener.listenOnceOnly(type, (e: MessageEvent) => {
                 resolve(e.detail.payload)
             }, (e: MessageEvent) => {
                 return e.detail.id === id && e.detail.type === type
             })
-            this.poster.target.postMessage(message)
+            this.poster.send(message)
         })
     }
 
-    private listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapper> = new WeakMap()
+    protected listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped> = new WeakMap()
+    protected wrap(handler: MessageHandler) {
+        return async (e: MessageEvent) => {
+            const { id, type, payload } = e.detail
+            const message = { id, type, payload: await handler(payload) }
+            this.poster.send(message)
+        }
+    }
+
     // get message and give response
     attach(type: MessageType, handler: MessageHandler) {
-        const wrapper = (e: MessageEvent) => {
-            
-        }
-        this.listenerWeakMap.set(handler, wrapper)
-        this.listener.listen(type, wrapper)
+        const wrapped = this.wrap(handler)
+        this.listenerWeakMap.set(handler, wrapped)
+        this.listener.listen(type, wrapped)
     }
 
     // remove listener
     detach(type: MessageType, handler: MessageHandler) {
-        const wrapper = this.listenerWeakMap.get(handler)
-        if (wrapper) this.listener.remove(type, wrapper);
+        const wrapped = this.listenerWeakMap.get(handler)
+        if (wrapped) {
+            this.listener.remove(type, wrapped)
+            this.listenerWeakMap.delete(handler)
+        }
+    }
+}
+
+// message target with transferable; use when poster must send message with transferable
+export class MessageTargetTransferable extends MessageTarget {
+    constructor(
+        protected readonly poster: MessagePosterTransferable,
+        protected readonly listener: MessageListener
+    ) {
+        super(poster, listener)
+    }
+
+    async send(type: MessageType, payload: MessagePayloadTranferable): Promise<MessagePayload> {
+        return new Promise(resolve => {
+            const id = generateId()
+            const message = { id, type, payload: payload[0] }
+            this.listener.listenOnceOnly(type, (e: MessageEvent) => {
+                resolve(e.detail.payload)
+            }, (e: MessageEvent) => {
+                return e.detail.id === id && e.detail.type === type
+            })
+            this.poster.send(message, payload[1])
+        })
+    }
+
+    protected wrap(handler: MessageHandlerTransferable) {
+        return async (e: MessageEvent) => {
+            const { id, type, payload } = e.detail
+            const [responsePayload, responseTranferable] = await handler(payload)
+            const message = { id, type, payload: responsePayload }
+            this.poster.send(message, responseTranferable)
+        }
     }
 }

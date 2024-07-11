@@ -3,12 +3,13 @@
 	"version": "0.0.1",
 	"type": "module",
 	"description": "Make postMessage easier",
-	"main": "src/index.js",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
 	"files": [
-		"dist/**/*"
+		"dist"
 	],
 	"scripts": {
-		"build": "tsc"
+		"build": "tsc && esbuild --target=es2020 --bundle src/index.ts --platform=browser --outdir=dist"
 	},
 	"repository": {
 		"type": "git",
@@ -23,9 +24,10 @@
 	"homepage": "https://github.com/freezm-ltd/post-together",
 	"devDependencies": {
 		"@types/serviceworker": "^0.0.89",
+		"esbuild": "^0.23.0",
 		"typescript": "^5.5.3"
 	},
 	"dependencies": {
-		"@freezm-ltd/event-target-2": "^0.0.4"
+		"@freezm-ltd/event-target-2": "github:freezm-ltd/EventTarget2"
 	}
 }
