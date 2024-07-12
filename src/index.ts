@@ -1,46 +1,57 @@
-import { isMessageListenable, isPrecursorPairEqual, MessageListenable, MessageListener, MessagePostable, MessagePoster, MessagePosterTransferable, MessageTarget, MessageTargetPrecursorPair, MessageTargetTransferable, SupportsTransferable } from "./message";
+import { MessageListenable, MessageSendable, MessageSendableLike, MessageTarget, MessageTargetOption } from "./message"
+
 
 export class MessageTargetFactory {
-    private constructor() {}
+    private constructor() { }
 
-    private static targets: Set<[MessageTargetPrecursorPair, MessageTarget | MessagePosterTransferable]> = new Set()
-    private static getExistingMessageTarget(post: MessagePostable, listen: MessageListenable) {
-        const newPair = { post, listen }
-        for (let [pair, target] of MessageTargetFactory.targets) {
-            if (isPrecursorPairEqual(newPair, pair)) {
-                return target
+    public static new(option: MessageTargetOption) {
+        let send: MessageSendable | MessageSendableLike | null = null
+        let listen: MessageListenable | null = null
+
+        switch (option) {
+            case ServiceWorker.prototype: {
+                send = option
+                listen = window.navigator.serviceWorker // listen from ServiceWorkerContainer
+                break
+            }
+            case ServiceWorkerContainer.prototype: {
+                send = option.controller!
+                listen = option
+                break
+            }
+            case Worker.prototype: {
+                send = listen = option
+                break
+            }
+            case WorkerGlobalScope.prototype: {
+                send = (e) => (e as MessageEvent).source! // firet receive window's message and then response to that window (depends on window's message)
+                listen = option
+                break
+            }
+            case Window.prototype: {
+                send = option
+                listen = window // listen window itself
+                break
+            }
+            case Client.prototype: {
+                send = option
+                listen = self as WorkerGlobalScope // listen workerGlobal itself
+                break
+            }
+            case BroadcastChannel.prototype: {
+                send = listen = option // TODO: transferable support wrapper needed
+                break
+            }
+            case MessagePort.prototype: {
+                send = listen = option
+                break
             }
         }
-    }
 
-    public static new(target: MessagePostable & MessageListenable): MessageTarget
-    public static new(post: MessagePostable, listen: MessageListenable): MessageTarget
-    public static new(postOrTarget: MessagePostable | MessagePostable & MessageListenable, listen?: MessageListenable) {
-        let poster, listener;
-        poster = new MessagePoster(postOrTarget)
-        if (listen) {
-            listener = new MessageListener(listen)
-        } else if (isMessageListenable(postOrTarget)) {
-            listener = new MessageListener(postOrTarget)
+        if (send && listen) {
+            return new MessageTarget(send, listen)
         } else {
-            throw new Error("Cannot create MessageTarget: listener not found or not supported")
+            throw new Error("MessageTargetFactoryError: Cannot create MessageTarget, arguments not supported")
         }
-        const pair = { poster, listener }
-        return new MessageTarget(poster, listener)
-    }
-
-    public static newTransferable(target: MessagePostable & MessageListenable & SupportsTransferable): MessageTargetTransferable
-    public static newTransferable(post: MessagePostable & SupportsTransferable, listen: MessageListenable): MessageTargetTransferable
-    public static newTransferable(postOrTarget: (MessagePostable | MessagePostable & MessageListenable) & SupportsTransferable, listen?: MessageListenable) {
-        let poster, listener;
-        poster = new MessagePosterTransferable(postOrTarget)
-        if (listen) {
-            listener = new MessageListener(listen)
-        } else if (isMessageListenable(postOrTarget)) {
-            listener = new MessageListener(postOrTarget)
-        } else {
-            throw new Error("Cannot create MessageTargetTransferable: listener not found or not supported")
-        }
-        return new MessageTargetTransferable(poster, listener)
     }
 }
