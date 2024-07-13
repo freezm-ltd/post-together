@@ -1,11 +1,12 @@
-import { MessageListenable, MessageSendable, MessageSendableLike, MessageTarget, MessageTargetOption } from "./message"
+import { BroadcastTransferableChannel } from "./broadcastchannel"
+import { MessageListenable, MessageSendable, MessageSendableGenerator, MessageTarget, MessageTargetOption } from "./message"
 
 
 export class MessageTargetFactory {
     private constructor() { }
 
     public static new(option: MessageTargetOption) {
-        let send: MessageSendable | MessageSendableLike | null = null
+        let send: MessageSendable | MessageSendableGenerator | null = null
         let listen: MessageListenable | null = null
 
         switch (option) {
@@ -24,7 +25,7 @@ export class MessageTargetFactory {
                 break
             }
             case WorkerGlobalScope.prototype: {
-                send = (e) => (e as MessageEvent).source! // firet receive window's message and then response to that window (depends on window's message)
+                send = (e) => (e as ExtendableMessageEvent).source! // firet receive window's message and then response to that window (depends on window's message)
                 listen = option
                 break
             }
@@ -39,8 +40,7 @@ export class MessageTargetFactory {
                 break
             }
             case BroadcastChannel.prototype: {
-                send = listen = option // TODO: transferable support wrapper needed
-                break
+                return new BroadcastTransferableChannel(option as BroadcastChannel) // transferable support wrapper
             }
             case MessagePort.prototype: {
                 send = listen = option

@@ -1,35 +1,43 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2"
 import { generateId } from "./utils"
 
+export const IDENTIFIER = "post-together"
+
 // message types
-export type Message = { id: MessageId, type: MessageType, payload: MessagePayload }
-export type MessageEvent = CustomEvent<Message>
+export type Message = { id: MessageId, type: MessageType, payload: MessagePayload, __identifier: typeof IDENTIFIER }
+export function isMessageFromThisModule(data: any) { // process message only from this module(post-together)
+    return data.__identifier === IDENTIFIER
+}
+export function isMessage(data: any) {
+    return isMessagePrecursor(data) && isMessageFromThisModule(data) // check whether message should be processed
+}
+export type MessagePrecursor = Omit<Message, "__identifier">
+export function isMessagePrecursor(data: any) {
+    return data.id && data.type && data.payload
+}
+export type MessageCustomEvent = CustomEvent<Message>
 export type MessageType = string
 export type MessageId = string // unique identifier for multiple messages
 export type MessagePayload = { data: MessagePayloadData, transfer?: MessagePayloadTransferable }
 export type MessagePayloadData = any
 export type MessagePayloadTransferable = Transferable[]
-function isMessageEvent(e: Event): e is MessageEvent {
-    if ("data" in e) {
-        const data = e.data as Message
-        if (data.id && data.type && data.payload) return true
-    }
-    return false
+function isMessageCustomEvent(e: Event): e is MessageCustomEvent {
+    return "data" in e && isMessage(e.data)
 }
 
 // message handler type
 export type MessageHandler = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => PromiseLike<MessagePayload> | MessagePayload
-export type MessageHandlerWrapped = (e: MessageEvent) => void
+export type MessageHandlerWrapped = (e: MessageCustomEvent) => void
 
 // message target types
 export type MessageTargetOption = ServiceWorker | ServiceWorkerContainer | Worker | WorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort
-export type MessageSendable = ServiceWorker | Worker | Window | Client | BroadcastChannel | MessagePort // includes MessageEventSource
-export type MessageSendableLike = (e: Event) => MessageSendable
+export type MessageSendable = ServiceWorker | Worker | Window | Client | BroadcastChannel | MessagePort // includes MessageCustomEventSource
+export type MessageSendableGenerator = (e: Event) => MessageSendable
 export type MessageListenable = ServiceWorkerContainer | Worker | WorkerGlobalScope | Window | BroadcastChannel | MessagePort
 export function isMessageSendable(target: any): target is MessageSendable {
     return "postMessage" in target
 }
-export function isMessageSendableLike(target: any): target is MessageSendableLike {
+export function isMessageSendableGenerator(target: any): target is MessageSendableGenerator {
     return typeof target === "function"
 }
 export function isMessageListenable(target: any): target is MessageListenable {
@@ -45,7 +53,7 @@ export class MessageListener extends EventTarget2 {
     ) {
         super()
         this.wrapper = (e: Event) => {
-            if (isMessageEvent(e)) this.dispatch(e.type, e);
+            if (isMessageCustomEvent(e)) this.dispatch(e.type, e);
         }
         this.activate()
     }
@@ -66,21 +74,22 @@ export class MessageListener extends EventTarget2 {
 // simply wrap postMessage
 export class MessageSender extends EventTarget2 {
     constructor(
-        readonly target: MessageSendable | MessageSendableLike
+        readonly target: MessageSendable | MessageSendableGenerator
     ) {
         super()
     }
 
-    send(msg: Message, transfer?: Transferable[], event?: Event) {
+    send(msg: MessagePrecursor, transfer?: Transferable[], event?: Event) {
         let target = this.target
-        if (isMessageSendableLike(target)) {
+        if (isMessageSendableGenerator(target)) {
             if (event) {
                 target = target(event)
             } else {
                 throw new Error("MessageSenderSendError: sender cannot send message without argument 'event'. It depends on parent MessageTarget listener's MessageEvent, which includes MessageEventSource")
             }
         }
-        target.postMessage(msg, { transfer })
+        Object.assign(msg, { __identifier: IDENTIFIER })
+        target.postMessage(msg as Message, { transfer })
     }
 }
 
@@ -88,9 +97,9 @@ export class MessageSender extends EventTarget2 {
 export class MessageTarget {
     protected readonly sender: MessageSender
     protected readonly listener: MessageListener
-    private activated = true
+    protected activated = true
 
-    constructor(sendTo: MessageSendable | MessageSendableLike, listenFrom: MessageListenable) {
+    constructor(sendTo: MessageSendable | MessageSendableGenerator, listenFrom: MessageListenable) {
         this.sender = new MessageSender(sendTo)
         this.listener = new MessageListener(listenFrom)
     }
@@ -100,9 +109,9 @@ export class MessageTarget {
         return new Promise(resolve => {
             const id = generateId()
             const message = { id, type, payload }
-            this.listener.listenOnceOnly(type, (e: MessageEvent) => {
+            this.listener.listenOnceOnly(type, (e: MessageCustomEvent) => {
                 resolve(e.detail.payload)
-            }, (e: MessageEvent) => {
+            }, (e: MessageCustomEvent) => {
                 return e.detail.id === id && e.detail.type === type && this.activated
             })
             this.sender.send(message, payload.transfer)
@@ -111,7 +120,7 @@ export class MessageTarget {
 
     protected listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped> = new WeakMap()
     protected wrap(handler: MessageHandler) {
-        return async (e: MessageEvent) => {
+        return async (e: MessageCustomEvent) => {
             const { id, type, payload } = e.detail
             const response = await handler(payload.data, payload.transfer)
             const message = { id, type, payload: response }
