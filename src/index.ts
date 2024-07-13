@@ -1,57 +1,57 @@
-import { BroadcastTransferableChannel } from "./broadcastchannel"
-import { MessageListenable, MessageSendable, MessageSendableGenerator, MessageTarget, MessageTargetOption } from "./message"
+import { MessageListenable, MessageSendable, MessageSendableGenerator, Messenger, MessengerOption } from "./message"
 
 
-export class MessageTargetFactory {
+export class MessengerFactory {
     private constructor() { }
 
-    public static new(option: MessageTargetOption) {
-        let send: MessageSendable | MessageSendableGenerator | null = null
-        let listen: MessageListenable | null = null
+    public static new(option: MessengerOption) {
+        let send: MessageSendable | MessageSendableGenerator | undefined
+        let listen: MessageListenable | undefined
 
-        switch (option) {
-            case ServiceWorker.prototype: {
-                send = option
+        switch (option.constructor) {
+            case ServiceWorker: {
+                send = option as ServiceWorker
                 listen = window.navigator.serviceWorker // listen from ServiceWorkerContainer
                 break
             }
-            case ServiceWorkerContainer.prototype: {
-                send = option.controller!
-                listen = option
+            case ServiceWorkerContainer: {
+                send = (option as ServiceWorkerContainer).controller!
+                listen = option as ServiceWorkerContainer
                 break
             }
-            case Worker.prototype: {
-                send = listen = option
+            case Worker: {
+                send = listen = option as Worker
                 break
             }
-            case WorkerGlobalScope.prototype: {
+            case WorkerGlobalScope: {
                 send = (e) => (e as ExtendableMessageEvent).source! // firet receive window's message and then response to that window (depends on window's message)
-                listen = option
+                listen = option as WorkerGlobalScope
                 break
             }
-            case Window.prototype: {
-                send = option
+            case Window: {
+                send = option as Window // target window
                 listen = window // listen window itself
                 break
             }
-            case Client.prototype: {
-                send = option
+            case Client: {
+                send = option as Client
                 listen = self as WorkerGlobalScope // listen workerGlobal itself
                 break
             }
-            case BroadcastChannel.prototype: {
-                return new BroadcastTransferableChannel(option as BroadcastChannel) // transferable support wrapper
+            case BroadcastChannel: {
+                send = listen = option as BroadcastChannel
+                break
             }
-            case MessagePort.prototype: {
-                send = listen = option
+            case MessagePort: {
+                send = listen = option as MessagePort
                 break
             }
         }
 
         if (send && listen) {
-            return new MessageTarget(send, listen)
+            return new Messenger(send, listen)
         } else {
-            throw new Error("MessageTargetFactoryError: Cannot create MessageTarget, arguments not supported")
+            throw new Error("MessengerFactoryError: Cannot create Messenger, arguments not supported")
         }
     }
 }
