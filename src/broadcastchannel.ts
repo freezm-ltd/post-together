@@ -1,4 +1,5 @@
-import { IDENTIFIER, Message, MessageHandler, MessageId, Messenger, MessageType, MessageSendable, unwrapMessage, MessageHandlerWrapped, MessagePayload } from "./message";
+import { EventTarget2 } from "@freezm-ltd/event-target-2";
+import { IDENTIFIER, Message, MessageHandler, MessageId, Messenger, MessageType, unwrapMessage, MessageHandlerWrapped, MessagePayload, MessengerOption } from "./message";
 import { MessengerFactory } from "src.ts";
 
 const MessageHubCrossOriginIframeURL = ""
@@ -11,7 +12,8 @@ export class BroadcastChannelMessenger extends Messenger {
         if (message.payload.transfer) {
             const { payload, ...metadata } = message
             // store message
-            await MessageHub.store(message)
+            const response = await MessageHub.instance.store(message)
+            if (response.data !== "success") throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
             // send metadata only (without payload which includes transferables)
             this._getSendTo().postMessage(metadata)
         } else {
@@ -24,9 +26,10 @@ export class BroadcastChannelMessenger extends Messenger {
             const request = unwrapMessage(e)
             if (request && request.type === type && this.activated) { // type and activation check
                 if (!request.payload) { // if metadata (no payload)
-                    const { id, type } = request
+                    const { id } = request
                     // fetch request payload
-                    const payload = await MessageHub.fetch(id)
+                    const payload = await MessageHub.instance.fetch(id)
+                    if (payload.data === "error") throw new Error("BroadcastChannelMessengerListenError: MessageHub fetch failed.");
                     // payload inject to message
                     request.payload = payload
                 }
@@ -38,135 +41,161 @@ export class BroadcastChannelMessenger extends Messenger {
     }
 }
 
-type MessageBackwardTarget = Worker | Window
+// hub of messages, can be in window, dedicated worker, service worker(alternative of shared worker, which not usable in chrome mobile)
+// forward messages to MessageHub(not in service worker) or store/fetch messages MessageHub(in service worker)
+export abstract class AbstractMessageHub extends EventTarget2 {
+    protected target: Messenger | undefined // message store/fetch request target
+    private initNeed = true
 
-export class MessageForwarder {
-    // backwardTarget -> request -> forwardTarget -> response -> backwardTarget(ExtendableMessageEvent.source)
-    readonly types: Set<MessageType> = new Set()
-    private listenerWeakMap: WeakMap<MessageBackwardTarget, EventListener> = new WeakMap()
+    constructor() {
+        super()
+        this.init()
+    }
 
-    constructor(
-        readonly forwardTo: MessageSendable
-    ) { }
+    private async init() {
+        await this.init()
+        this.initNeed = false
+        this.dispatch("done")
+    }
 
-    protected _listener() {
-        return async (e: Event) => {
-            const source = (e as ExtendableMessageEvent).source
-            const request = unwrapMessage(e)
-            if (source && request && this.types.has(request.type)) {
-                // listen for response
-                const responseListener = (e: Event) => {
-                    const response = unwrapMessage(e)
-                    if (response && response.id === request.id && response.type === request.type) {
-                        globalThis.removeEventListener("message", responseListener)
-                        // backward response
-                        // TODO: if e.source is self?
-                        source.postMessage(response, { transfer: response.payload.transfer })
-                    }
-                }
-                globalThis.addEventListener("message", responseListener)
-                // forward request
-                this.forwardTo.postMessage(request, { transfer: request.payload.transfer })
-            }
+    protected _init() {
+
+    }
+
+    async store(message: Message): Promise<MessagePayload> {
+        if (!this.initNeed) await this.waitFor("done");
+        const response = await this.target!.request(MessageStoreMessageType, { data: message, transfer: message.payload.transfer })
+        if (response && response.data === "success") {
+            return response
+        } else {
+            throw new Error("MessageHubStoreError: MessagHub returned corrupted or unsuccessful response.");
         }
     }
 
-    add(backward: MessageBackwardTarget) {
-        if (this.listenerWeakMap.has(backward)) return;
-        const listener = this._listener()
-        globalThis.addEventListener("message", listener)
-        this.listenerWeakMap.set(backward, listener)
+    async fetch(id: MessageId): Promise<MessagePayload> {
+        if (!this.initNeed) await this.waitFor("done");
+        const response = await this.target!.request(MessageFetchMessageType, { data: id })
+        if (response && response.data !== "error") {
+            return response.data
+        } else {
+            throw new Error("MessageHubFetchError: MessagHub returned corrupted or unsuccessful response.");
+        }
     }
 
-    remove(backward: MessageBackwardTarget) {
-        if (!this.listenerWeakMap.has(backward)) return;
-        globalThis.removeEventListener("message", this.listenerWeakMap.get(backward)!)
+    // listen request
+    addListen(listenFrom: MessengerOption) {
+        const listenTarget = MessengerFactory.new(listenFrom)
+        // store message
+        listenTarget.response(MessageStoreMessageType, async (message: Message) => {
+            return await this.store(message)
+        })
+        // fetch message
+        listenTarget.response(MessageFetchMessageType, async (id: MessageId) => {
+            return await this.fetch(id)
+        })
     }
 }
 
-// hub of messages, can be in window, dedicated worker, service worker(alternative of shared worker, which not usable in chrome mobile)
-// forward messages to MessageHub(not in service worker) or store/fetch messages MessageHub(in service worker)
-export class MessageHub {
-    private static instance: MessageHub | undefined
-    private storage: Map<MessageId, Message> = new Map()
-    private target?: Messenger
-    private forwarder: MessageForwarder | undefined
+class ServiceWorkerMessageHub extends AbstractMessageHub {
+    protected storage: Map<MessageId, MessagePayload> = new Map()
 
-    static async store(message: Message) {
-        throw new Error("MessageHubStoreError: MessagHub returned corrupted or unsuccessful response.");
+    // add listen; requests from windows -> serviceworker
+    async _init() {
+        this.addListen(self as ServiceWorkerGlobalScope)
     }
 
-    static async fetch(id: MessageId): MessagePayload {
-        throw new Error("MessageHubFetchError: MessagHub returned corrupted or unsuccessful response.");
+    // service worker is MessageHub storage itself
+    async store(message: Message) {
+        this.storage.set(message.id, message.payload)
+        return { data: "success" }
     }
 
-    // singleton
-    private constructor() {
-        switch (globalThis.constructor) {
-            case ServiceWorkerGlobalScope:
-                this._initFromServiceWorker()
-                break
-            case Window:
-                this._initFromWindow()
-                break
-            case DedicatedWorkerGlobalScope:
-                this._initFromDedicatedWorker()
-                break
-        }
-
-        if (this.forwarder) { // add forward target types
-            this.forwarder.types.add(MessageStoreMessageType)
-            this.forwarder.types.add(MessageFetchMessageType)
-        }
+    async fetch(id: MessageId) {
+        let payload = this.storage.get(id)
+        if (!payload) payload = { data: "error" };
+        return payload
     }
+}
 
-    // service worker is MessageHub itself
-    private _initFromServiceWorker() {
-        this.target = MessengerFactory.new(self as ServiceWorkerGlobalScope)
-        // store message
-        this.target.response(MessageStoreMessageType, (message: Message) => {
-            this.storage.set(message.id, message)
-            return { data: "success" }
-        })
-        // fetch message
-        this.target.response(MessageFetchMessageType, (id: MessageId) => {
-            const message = this.storage.get(id)
-            if (message) return { data: message, transfer: message.payload.transfer };
-            return { data: "error" }
-        })
+class DedicatedWorkerMessageHub extends AbstractMessageHub {
+    // worker -> parent window
+    async _init() {
+        this.target = MessengerFactory.new(self as DedicatedWorkerGlobalScope)
     }
+}
 
-    // worker -> window -> iframe and/or service worker -> window -> worker
-    private _initFromWindow() {
+class WindowMessageHub extends AbstractMessageHub {
+    // worker/window -> window -> iframe/serviceworker -> window -> worker/window
+    async _init() {
         const serviceWorkerContainer = globalThis.navigator.serviceWorker
-        if (serviceWorkerContainer.controller) { // window -> service worker(same-origin)
+        // window -> service worker(same-origin)
+        if (serviceWorkerContainer.controller) {
             this.target = MessengerFactory.new(serviceWorkerContainer)
-            this.forwarder = new MessageForwarder(serviceWorkerContainer.controller)
-        } else { // window -> iframe(cross-origin)
+        } 
+        // window -> iframe(cross-origin)
+        else {
             const iframe = document.createElement("iframe")
             iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
             iframe.style.display = "none"
             document.appendChild(iframe)
             const iframeWindow = iframe.contentWindow!
             this.target = MessengerFactory.new(iframeWindow)
-            this.forwarder = new MessageForwarder(iframeWindow)
         }
+        // add forward requests from other window -> this window
+        this.addListen(window)
         // worker <--> window; inject listener code to prototype, to backward message to worker
         // TODO: Worker prototype injection needed?
-    }
-
-    // worker -> parent window
-    private _initFromDedicatedWorker() {
-        this.target = MessengerFactory.new(self as DedicatedWorkerGlobalScope)
-    }
-
-    public static init() {
-        //if (globalThis !== ServiceWorkerGlobalScope.prototype) throw new Error("MessageHubInitError: MessageHub.init() must be called from ServiceWorkerGlobalScope");
-        if (!MessageHub.instance) MessageHub.instance = new MessageHub();
+        // ... this.addForward(workers)
     }
 }
 
-export function enableMessageHub() {
-    //if (globalThis !== ServiceWorkerGlobalScope.prototype) throw new Error("enableMessageHubError: enableMessageHub() must be called from ServiceWorkerGlobalScope");
+// singleton
+export class MessageHub extends AbstractMessageHub {
+    private static _instance: MessageHub
+    hub: AbstractMessageHub
+    
+    private constructor() {
+        super()
+        switch (globalThis.constructor) {
+            case ServiceWorkerGlobalScope:
+                this.hub = new ServiceWorkerMessageHub()
+                break
+            case Window:
+                this.hub = new WindowMessageHub()
+                break
+            case DedicatedWorkerGlobalScope:
+                this.hub = new DedicatedWorkerMessageHub()
+                break
+            default:
+                throw new Error("MessageHubConstructError: Cannot create MessageHub instance in this scope.")
+        }
+    }
+    
+    static init() {
+        if (!MessageHub._instance) MessageHub._instance = new MessageHub();
+    }
+
+    static get instance() {
+        this.init()
+        return MessageHub._instance
+    }
+    
+    async store(message: Message): Promise<MessagePayload> {
+        return this.hub.store(message)
+    }
+
+    async fetch(id: MessageId): Promise<MessagePayload> {
+        return this.hub.fetch(id)
+    }
+}
+
+export function initMessageHub() {
     MessageHub.init()
+}
+
+// connect (child) worker to parent
+export function workerWithMessageHub(scriptURL: string | URL, options?: WorkerOptions) {
+    const worker = new Worker(scriptURL, options)
+    MessageHub.instance.addListen(worker)
+    return worker
 }
