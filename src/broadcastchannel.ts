@@ -2,6 +2,8 @@ import { IDENTIFIER, Message, MessageCustomEvent, MessageHandler, MessageId, Mes
 import { generateId } from "./utils";
 import { MessengerFactory } from "src.ts";
 
+const MessageHubCrossOriginIframeURL = ""
+
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
 
@@ -34,21 +36,43 @@ export class BroadcastChannelSendTarget extends MessageSendTarget {
     }
 }
 
+type MessageBackwardTarget = Worker | Window
+
 export class MessageForwarder {
     // backwardTarget -> request -> forwardTarget -> response -> backwardTarget(ExtendableMessageEvent.source)
-    // not working on dedicated worker; must attach event listener to target worker
-    private messageSourceTable: Map<MessageId, ServiceWorker | Client | MessagePort> = new Map()
-    constructor(
-        readonly type: MessageType,
-        readonly forward: MessengerOption,
-        readonly backward: EventTarget = globalThis as (Window | ServiceWorkerGlobalScope | WorkerGlobalScope)
-    ) {
-        const forwardTarget = MessengerFactory.new(forward)
-        const backwardTarget = backward
+    readonly forward: Messenger
+    readonly types: Set<MessageType> = new Set()
+    private listenerWeakMap: WeakMap<MessageBackwardTarget, EventListener> = new WeakMap()
 
-        backwardTarget.addEventListener("message", (e: Event) => {
-            
-        })
+    constructor(forwardTarget: MessageSendable) {
+        this.forward = MessengerFactory.new(forwardTarget)
+    }
+
+    protected createListener() {
+        return async (e: Event) => {
+            const source = (e as ExtendableMessageEvent).source
+            const message = unwrapMessage(e)
+            if (source && message && this.types.has(message.type)) {
+                const { id, type, __identifier } = message
+                // forward message and get response
+                const responsePayload = await this.forward.send(message.type, message.payload)
+                const response = { id, type, payload: responsePayload, __identifier }
+                // backward message
+                source.postMessage(response, { transfer: response.payload.transfer })
+            }
+        }
+    }
+
+    addListen(backward: MessageBackwardTarget) {
+        if (this.listenerWeakMap.has(backward)) return;
+        const listener = this.createListener()
+        backward.addEventListener("message", listener)
+        this.listenerWeakMap.set(backward, listener)
+    }
+
+    removeListen(backward: MessageBackwardTarget) {
+        if (!this.listenerWeakMap.has(backward)) return;
+        backward.removeEventListener("message", this.listenerWeakMap.get(backward)!)
     }
 }
 
@@ -58,43 +82,65 @@ export class MessageHub {
     private static instance: MessageHub | undefined
     private map: Map<MessageId, Message> = new Map()
     private target?: Messenger
+    private forwarder: MessageForwarder | undefined
+
+    // singleton
     private constructor() {
         switch (globalThis.constructor) {
-            case ServiceWorkerGlobalScope: { // service worker is MessageHub self
-                this.target = MessengerFactory.new(globalThis as ServiceWorkerGlobalScope)
-                this.target.attach(MessageStoreMessageType, (data) => {
-                    const message = data as Message
-                    this.map.set(message.id, message)
-                    return { data: "success" }
-                })
-                this.target.attach(MessageFetchMessageType, (data) => {
-                    const { id } = data
-                    const message = this.map.get(id)
-                    if (message) {
-                        return { data: message, transfer: message.payload.transfer }
-                    }
-                    return { data: "error" }
-                })
+            case ServiceWorkerGlobalScope:
+                this._initFromServiceWorker()
                 break
-            }
-
-            case Window: { // 
-                const serviceWorkerContainer = globalThis.navigator.serviceWorker
-                if (serviceWorkerContainer.controller) { // window -> service worker(same-origin)
-                    send = serviceWorkerContainer.controller
-                    listen = serviceWorkerContainer
-                } else { // window -> iframe(cross-origin)
-
-                }
+            case Window:
+                this._initFromWindow()
                 break
-            }
-
-            case WorkerGlobalScope: { // worker -> parent window
-
-
+            case WorkerGlobalScope:
+                this._initFromDedicatedWorker()
                 break
-            }
         }
+
+        if (this.forwarder) { // add forward target types
+            this.forwarder.types.add(MessageStoreMessageType)
+            this.forwarder.types.add(MessageFetchMessageType)
+        }
+    }
+
+    // service worker is MessageHub self
+    private _initFromServiceWorker() {
+        this.target = MessengerFactory.new(globalThis as ServiceWorkerGlobalScope)
+        // store message
+        this.target.attach(MessageStoreMessageType, (data) => {
+            const message = data as Message
+            this.map.set(message.id, message)
+            return { data: "success" }
+        })
+        // fetch message
+        this.target.attach(MessageFetchMessageType, (data) => {
+            const { id } = data
+            const message = this.map.get(id)
+            if (message) {
+                return { data: message, transfer: message.payload.transfer }
+            }
+            return { data: "error" }
+        })
+    }
+
+    // worker -> window -> iframe and/or service worker -> window -> worker
+    private _initFromWindow() {
+        const serviceWorkerContainer = globalThis.navigator.serviceWorker
+        if (serviceWorkerContainer.controller) { // window -> service worker(same-origin)
+            this.forwarder = new MessageForwarder(serviceWorkerContainer.controller)
+        } else { // window -> iframe(cross-origin)
+            const iframe = document.createElement("iframe")
+            iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
+            this.forwarder = new MessageForwarder(iframe.contentWindow!)
+        }
+        // worker <--> window; inject listener code to prototype, to backward message to worker
+        // TODO: Worker prototype injection needed?
+    }
+
+    // worker -> parent window
+    private _initFromDedicatedWorker() {
+        
     }
 
     public static init() {
