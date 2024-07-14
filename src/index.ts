@@ -1,11 +1,12 @@
-import { MessageListenable, MessageSendable, MessageSendableGenerator, Messenger, MessengerOption } from "./message"
+import { BroadcastChannelMessenger } from "./broadcastchannel"
+import { MessageListenable, MessageSendable, Messenger, MessengerOption } from "./message"
 
 
 export class MessengerFactory {
     private constructor() { }
 
     public static new(option: MessengerOption) {
-        let send: MessageSendable | MessageSendableGenerator | undefined
+        let send: MessageSendable | undefined
         let listen: MessageListenable | undefined
 
         switch (option.constructor) {
@@ -19,13 +20,17 @@ export class MessengerFactory {
                 listen = option as ServiceWorkerContainer
                 break
             }
+            case ServiceWorkerGlobalScope: {
+                send = undefined // only can response from e.source
+                listen = option as ServiceWorkerGlobalScope
+                break
+            }
             case Worker: {
                 send = listen = option as Worker
                 break
             }
-            case WorkerGlobalScope: {
-                send = (e) => (e as ExtendableMessageEvent).source! // firet receive window's message and then response to that window (depends on window's message)
-                listen = option as WorkerGlobalScope
+            case DedicatedWorkerGlobalScope: {
+                send = listen = option as DedicatedWorkerGlobalScope
                 break
             }
             case Window: {
@@ -35,12 +40,12 @@ export class MessengerFactory {
             }
             case Client: {
                 send = option as Client
-                listen = self as WorkerGlobalScope // listen workerGlobal itself
+                listen = self as DedicatedWorkerGlobalScope // listen itself
                 break
             }
             case BroadcastChannel: {
                 send = listen = option as BroadcastChannel
-                break
+                return new BroadcastChannelMessenger(listen, send)
             }
             case MessagePort: {
                 send = listen = option as MessagePort
@@ -48,8 +53,8 @@ export class MessengerFactory {
             }
         }
 
-        if (send && listen) {
-            return new Messenger(send, listen)
+        if (listen) {
+            return new Messenger(listen, send)
         } else {
             throw new Error("MessengerFactoryError: Cannot create Messenger, arguments not supported")
         }

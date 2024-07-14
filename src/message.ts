@@ -1,20 +1,12 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2"
 import { generateId } from "./utils"
-import { BroadcastChannelListenTarget, BroadcastChannelSendTarget } from "./broadcastchannel"
 
 export const IDENTIFIER = "post-together"
 
 // message types
 export type Message = { id: MessageId, type: MessageType, payload: MessagePayload, __identifier: typeof IDENTIFIER }
-export function isMessageFromThisModule(data: any) { // process message only from this module(post-together)
-    return data.__identifier === IDENTIFIER
-}
 export function isMessage(data: any) {
-    return isMessagePrecursor(data) && isMessageFromThisModule(data) // check whether message should be processed
-}
-export type MessagePrecursor = Omit<Message, "__identifier">
-export function isMessagePrecursor(data: any) {
-    return data.id && data.type && data.payload
+    return data.id && data.type && data.payload && data.__identifier === IDENTIFIER // check whether message should be processed
 }
 export type MessageCustomEvent = CustomEvent<Message>
 export type MessageType = string
@@ -34,169 +26,112 @@ export function unwrapMessage(e: Event) {
 // message handler type
 export type MessageHandler = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => PromiseLike<MessagePayload> | MessagePayload
 export type MessageEventListener = (e: MessageCustomEvent) => any
-export type MessageHandlerWrapped = (e: MessageCustomEvent) => void
+export type MessageHandlerWrapped = (e: Event) => void
 
 // message target types
-export type MessengerOption = ServiceWorker | ServiceWorkerContainer | Worker | WorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort
-export type MessageSendable = ServiceWorker | Worker | Window | Client | BroadcastChannel | MessagePort // includes MessageCustomEventSource
-export type MessageSendableGenerator = (e: Event) => MessageSendable
-export type MessageListenable = ServiceWorkerContainer | Worker | WorkerGlobalScope | Window | BroadcastChannel | MessagePort
+export type MessengerOption = ServiceWorker | ServiceWorkerContainer | ServiceWorkerGlobalScope | Worker | DedicatedWorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort
+export type MessageSendable = ServiceWorker | Worker | DedicatedWorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort
+export type MessageListenable = ServiceWorkerContainer | ServiceWorkerGlobalScope | Worker | DedicatedWorkerGlobalScope | Window | BroadcastChannel | MessagePort
 export function isMessageSendable(target: any): target is MessageSendable {
     return "postMessage" in target
-}
-export function isMessageSendableGenerator(target: any): target is MessageSendableGenerator {
-    return typeof target === "function"
 }
 export function isMessageListenable(target: any): target is MessageListenable {
     return "addEventListener" in target
 }
 
-// wrap message listenTarget and dispatch custom message event as message type
-export class MessageListenTarget extends EventTarget2 {
-    protected listener = async (e: Event) => {
-        const message = unwrapMessage(e)
-        if (message && this.listenTypeMap.has(message.type)) this._listener(message);
-    }
-    protected _listener = async (message: Message) => {
-        this.dispatch(message.type, message);
-    }
-    private activated = true
-    constructor(
-        readonly target: MessageListenable
-    ) {
-        super()
-        this.activate()
-    }
-
-    protected listenTypeMap: Map<MessageType, number> = new Map()
-
-    // get message and give response
-    attach(type: MessageType, handler: MessageEventListener) {
-        const count = (this.listenTypeMap.get(type) || 0) + 1
-        this.listenTypeMap.set(type, count)
-        this.listen(type, handler)
-    }
-
-    // remove listener
-    detach(type: MessageType, handler: MessageEventListener) {
-        const count = (this.listenTypeMap.get(type) || 0) - 1
-        // no attached handler
-        if (count < 0) throw new Error("MessageListenTargetDetachError: Cannot detach handler, attach counter is 0");
-
-        if (count === 0) this.listenTypeMap.delete(type);
-        else this.listenTypeMap.set(type, count - 1);
-        this.remove(type, handler)
-    }
-
-    activate() {
-        if (this.activated) return;
-        this.target.addEventListener("message", this.listener)
-        this.activated = true
-    }
-
-    deactivate() {
-        if (!this.activated) return;
-        this.target.removeEventListener("message", this.listener)
-        this.activated = false
-    }
-}
-
-// simply wrap postMessage
-export class MessageSendTarget extends EventTarget2 {
-    constructor(
-        readonly target: MessageSendable | MessageSendableGenerator
-    ) {
-        super()
-    }
-
-    async send(messagePrecursor: MessagePrecursor, transfer?: Transferable[], event?: Event) {
-        let target = this.target
-        if (isMessageSendableGenerator(target)) {
-            if (event) {
-                target = target(event)
-            } else {
-                throw new Error("MessageSendTargetSendError: sendTarget cannot send message without argument 'event'. It depends on parent Messenger listenTarget's MessageEvent, which includes MessageEventSource")
-            }
-        }
-        Object.assign(messagePrecursor, { __identifier: IDENTIFIER })
-        await this._send(target, messagePrecursor as Message, transfer)
-    }
-
-    async _send(target: MessageSendable, message: Message, transfer?: Transferable[]) {
-        target.postMessage(message, { transfer })
-    }
-}
-
 // message send and listen 
 export class Messenger {
-    protected readonly sendTarget: MessageSendTarget
-    protected readonly listenTarget: MessageListenTarget
+    //protected readonly sendTarget: MessageSendTarget
+    //protected readonly listenTarget: MessageListenTarget
     protected activated = true
 
-    constructor(sendTo: MessageSendable | MessageSendableGenerator, listenFrom: MessageListenable) {
-        if (sendTo === BroadcastChannel.prototype) {
-            this.sendTarget = new BroadcastChannelSendTarget(sendTo)
-        } else {
-            this.sendTarget = new MessageSendTarget(sendTo)
-        }
+    constructor(
+        readonly listenFrom: MessageListenable,
+        readonly sendTo?: MessageSendable, // if not specified, independent request is blocked, can do only responsing
+    ) { }
 
-        if (listenFrom === BroadcastChannel.prototype) {
-            this.listenTarget = new BroadcastChannelListenTarget(listenFrom)
-        } else {
-            this.listenTarget = new MessageListenTarget(listenFrom)
-        }
+    // create request message from type and payload
+    protected createRequest(type: MessageType, payload: MessagePayload): Message {
+        const id = generateId()
+        return { id, type, payload, __identifier: IDENTIFIER }
     }
 
-    // give message and get response
-    async send(type: MessageType, payload: MessagePayload): Promise<MessagePayload> {
+    // create response message from request message and payload
+    protected createResponse(request: Message, payload: MessagePayload): Message {
+        const { id, type, __identifier } = request
+        return { id, type, payload, __identifier }
+    }
+
+    // listen for response
+    protected responseCallback(request: Message, callback: (responsePayload: MessagePayload) => any) {
+        const listener = (e: Event) => {
+            const response = unwrapMessage(e)
+            if (response && response.id === request.id && response.type === request.type) {
+                this.listenFrom.removeEventListener("message", listener)
+                callback(response.payload)
+            }
+        }
+        this.listenFrom.addEventListener("message", listener)
+    }
+
+    protected _getSendTo(event?: Event): MessageSendable {
+        let sendTo = this.sendTo
+        if (event) {
+            const source = (event as ExtendableMessageEvent).source
+            if (source) sendTo = source
+        }
+        return sendTo!
+    }
+
+    // send message
+    protected async _send(message: Message, event?: Event) {
+        this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer }) // send request
+    }
+
+    // send message and get response
+    request(type: MessageType, payload: MessagePayload): Promise<MessagePayload> {
         return new Promise(async (resolve) => {
-            const id = generateId()
-            const messagePrecursor = { id, type, payload }
-            this.listenTarget.listenOnceOnly(type, (e: MessageCustomEvent) => {
-                resolve(e.detail.payload)
-            }, (e: MessageCustomEvent) => {
-                return e.detail.id === id && e.detail.type === type && this.activated
-            })
-            await this.sendTarget.send(messagePrecursor, payload.transfer)
+            const message = this.createRequest(type, payload)
+            this.responseCallback(message, resolve) // listen for response
+            await this._send(message) // send request
         })
     }
 
+    // wrap message handler (request -> response)
     protected listenTargetWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped> = new WeakMap()
-    protected wrap(handler: MessageHandler) {
-        return async (e: MessageCustomEvent) => {
-            const { id, type, payload } = e.detail
-            const response = await handler(payload.data, payload.transfer)
-            const messagePrecursor = { id, type, payload: response }
-            await this.sendTarget.send(messagePrecursor, response.transfer, e)
+    protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped {
+        return async (e: Event) => {
+            const request = unwrapMessage(e)
+            if (request && request.type === type && this.activated) { // type and activation check
+                const payload = await handler(request.payload, request.payload.transfer)
+                const response = this.createResponse(request, payload)
+                await this._send(response, e)
+            }
         }
     }
 
-    // get message and give response
-    attach(type: MessageType, handler: MessageHandler) {
-        const wrapped = this.wrap(handler)
+    // get request and give response
+    response(type: MessageType, handler: MessageHandler) {
+        const wrapped = this.wrapMessageHandler(type, handler)
         this.listenTargetWeakMap.set(handler, wrapped)
-        this.listenTarget.attach(type, wrapped)
+        this.listenFrom.addEventListener("message", wrapped)
     }
 
-    // remove listenTarget
-    detach(type: MessageType, handler: MessageHandler) {
+    // remove response handler
+    deresponse(handler: MessageHandler) {
         const wrapped = this.listenTargetWeakMap.get(handler)
-        if (wrapped) {
-            this.listenTarget.detach(type, wrapped)
-        }
+        if (wrapped) this.listenFrom.removeEventListener("message", wrapped);
     }
 
     // re-activate message handling
     activate() {
         if (this.activated) return;
-        this.listenTarget.activate()
         this.activated = true
     }
 
     // deactivate message handling
     deactivate() {
         if (!this.activated) return;
-        this.listenTarget.deactivate()
         this.activated = false
     }
 }
