@@ -1,53 +1,55 @@
 import { BroadcastChannelMessenger } from "./broadcastchannel"
 import { MessageListenable, MessageSendable, Messenger, MessengerOption } from "./message"
-
+import { MessageHub } from "./broadcastchannel"
 
 export class MessengerFactory {
     private constructor() { }
 
     public static new(option: MessengerOption) {
+        if (!option) throw new Error("MessengerFactoryNoOptionError: Cannot create Messenger, argument 'option' is not provided");
+
         let send: MessageSendable | undefined
         let listen: MessageListenable | undefined
 
         switch (option.constructor) {
-            case ServiceWorker: {
+            case globalThis.ServiceWorker: {
                 send = option as ServiceWorker
                 listen = window.navigator.serviceWorker // listen from ServiceWorkerContainer
                 break
             }
-            case ServiceWorkerContainer: {
+            case globalThis.ServiceWorkerContainer: {
                 send = (option as ServiceWorkerContainer).controller!
                 listen = option as ServiceWorkerContainer
                 break
             }
-            case ServiceWorkerGlobalScope: {
+            case globalThis.ServiceWorkerGlobalScope: {
                 send = undefined // only can response from e.source
                 listen = option as ServiceWorkerGlobalScope
                 break
             }
-            case Worker: {
+            case globalThis.Worker: {
                 send = listen = option as Worker
                 break
             }
-            case DedicatedWorkerGlobalScope: {
+            case globalThis.DedicatedWorkerGlobalScope: {
                 send = listen = option as DedicatedWorkerGlobalScope
                 break
             }
-            case Window: {
+            case globalThis.Window: {
                 send = option as Window // target window
                 listen = window // listen window itself
                 break
             }
-            case Client: {
+            case globalThis.Client: {
                 send = option as Client
                 listen = self as DedicatedWorkerGlobalScope // listen itself
                 break
             }
-            case BroadcastChannel: {
-                send = listen = option as BroadcastChannel
-                return new BroadcastChannelMessenger(listen, send)
+            case globalThis.BroadcastChannel: {
+                const channel = option as BroadcastChannel // newly create BroadcastChannel, to bypass blocking of self-posted message listening
+                return new BroadcastChannelMessenger(new BroadcastChannel(channel.name), new BroadcastChannel(channel.name))
             }
-            case MessagePort: {
+            case globalThis.MessagePort: {
                 send = listen = option as MessagePort
                 break
             }
@@ -59,4 +61,15 @@ export class MessengerFactory {
             throw new Error("MessengerFactoryError: Cannot create Messenger, arguments not supported")
         }
     }
+}
+
+export function initMessageHub() {
+    MessageHub.init()
+}
+
+// connect (child) worker to parent
+export function workerWithMessageHub(scriptURL: string | URL, options?: WorkerOptions) {
+    const worker = new Worker(scriptURL, options)
+    MessageHub.instance.addListen(worker)
+    return worker
 }

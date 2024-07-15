@@ -24,7 +24,7 @@ export class BroadcastChannelMessenger extends Messenger {
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped {
         return async (e: Event) => {
             const request = unwrapMessage(e)
-            if (request && request.type === type && this.activated) { // type and activation check
+            if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
                 if (!request.payload) { // if metadata (no payload)
                     const { id } = request
                     // fetch request payload
@@ -53,12 +53,12 @@ export abstract class AbstractMessageHub extends EventTarget2 {
     }
 
     private async init() {
-        await this.init()
+        await this._init()
         this.initNeed = false
         this.dispatch("done")
     }
 
-    protected _init() {
+    protected async _init() {
 
     }
 
@@ -134,12 +134,19 @@ class WindowMessageHub extends AbstractMessageHub {
         } 
         // window -> iframe(cross-origin)
         else {
+            let iframeload = false
+            const _this = this
             const iframe = document.createElement("iframe")
+            iframe.onload = () => {
+                const iframeWindow = iframe.contentWindow!
+                _this.target = MessengerFactory.new(iframeWindow)
+                iframeload = true
+                _this.dispatch("iframeload")
+            }
             iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
             iframe.style.display = "none"
-            document.appendChild(iframe)
-            const iframeWindow = iframe.contentWindow!
-            this.target = MessengerFactory.new(iframeWindow)
+            document.body.appendChild(iframe)
+            if (!iframeload) await this.waitFor("iframeload");
         }
         // add forward requests from other window -> this window
         this.addListen(window)
@@ -157,13 +164,13 @@ export class MessageHub extends AbstractMessageHub {
     private constructor() {
         super()
         switch (globalThis.constructor) {
-            case ServiceWorkerGlobalScope:
+            case globalThis.ServiceWorkerGlobalScope:
                 this.hub = new ServiceWorkerMessageHub()
                 break
-            case Window:
+            case globalThis.Window:
                 this.hub = new WindowMessageHub()
                 break
-            case DedicatedWorkerGlobalScope:
+            case globalThis.DedicatedWorkerGlobalScope:
                 this.hub = new DedicatedWorkerMessageHub()
                 break
             default:
@@ -187,15 +194,4 @@ export class MessageHub extends AbstractMessageHub {
     async fetch(id: MessageId): Promise<MessagePayload> {
         return this.hub.fetch(id)
     }
-}
-
-export function initMessageHub() {
-    MessageHub.init()
-}
-
-// connect (child) worker to parent
-export function workerWithMessageHub(scriptURL: string | URL, options?: WorkerOptions) {
-    const worker = new Worker(scriptURL, options)
-    MessageHub.instance.addListen(worker)
-    return worker
 }

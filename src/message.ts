@@ -1,25 +1,25 @@
-import { EventTarget2 } from "@freezm-ltd/event-target-2"
 import { generateId } from "./utils"
 
 export const IDENTIFIER = "post-together"
 
 // message types
-export type Message = { id: MessageId, type: MessageType, payload: MessagePayload, __identifier: typeof IDENTIFIER }
+export type Message = { id: MessageId, type: MessageType, payload: MessagePayload, __type: MessageInternalType, __identifier: typeof IDENTIFIER }
 export function isMessage(data: any) {
     return data.id && data.type && data.payload && data.__identifier === IDENTIFIER // check whether message should be processed
 }
-export type MessageCustomEvent = CustomEvent<Message>
+export type MessageCustomEvent = MessageEvent<Message>
 export type MessageType = string
+export type MessageInternalType = "request" | "response"
 export type MessageId = string // unique identifier for multiple messages
 export type MessagePayload = { data: MessagePayloadData, transfer?: MessagePayloadTransferable }
 export type MessagePayloadData = any
 export type MessagePayloadTransferable = Transferable[]
 export function isMessageCustomEvent(e: Event): e is MessageCustomEvent {
-    return "detail" in e && isMessage(e.detail)
+    return "data" in e && isMessage(e.data)
 }
 export function unwrapMessage(e: Event) {
     if (isMessageCustomEvent(e)) {
-        return e.detail
+        return e.data
     }
 }
 
@@ -53,20 +53,20 @@ export class Messenger {
     // create request message from type and payload
     protected createRequest(type: MessageType, payload: MessagePayload): Message {
         const id = generateId()
-        return { id, type, payload, __identifier: IDENTIFIER }
+        return { id, type, payload, __type: "request", __identifier: IDENTIFIER }
     }
 
     // create response message from request message and payload
     protected createResponse(request: Message, payload: MessagePayload): Message {
         const { id, type, __identifier } = request
-        return { id, type, payload, __identifier }
+        return { id, type, payload, __type: "response", __identifier }
     }
 
     // listen for response
     protected responseCallback(request: Message, callback: (responsePayload: MessagePayload) => any) {
         const listener = (e: Event) => {
             const response = unwrapMessage(e)
-            if (response && response.id === request.id && response.type === request.type) {
+            if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
                 this.listenFrom.removeEventListener("message", listener)
                 callback(response.payload)
             }
@@ -102,7 +102,7 @@ export class Messenger {
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped {
         return async (e: Event) => {
             const request = unwrapMessage(e)
-            if (request && request.type === type && this.activated) { // type and activation check
+            if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
                 const payload = await handler(request.payload, request.payload.transfer)
                 const response = this.createResponse(request, payload)
                 await this._send(response, e)

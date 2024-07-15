@@ -9,7 +9,7 @@
 		"dist"
 	],
 	"scripts": {
-		"build": "tsc && esbuild --target=es2020 --bundle src/index.ts --platform=browser --outdir=dist"
+		"build": "tsc && esbuild --target=es2020 --bundle src/index.ts --format=esm --outdir=dist"
 	},
 	"repository": {
 		"type": "git",
@@ -25,6 +25,7 @@
 	"devDependencies": {
 		"@types/serviceworker": "^0.0.89",
 		"esbuild": "^0.23.0",
+		"tslib": "^2.6.3",
 		"typescript": "^5.5.3"
 	},
 	"dependencies": {
