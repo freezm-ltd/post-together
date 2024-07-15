@@ -46,8 +46,8 @@ export class MessengerFactory {
                 break
             }
             case globalThis.BroadcastChannel: {
-                const channel = option as BroadcastChannel // newly create BroadcastChannel, to bypass blocking of self-posted message listening
-                return new BroadcastChannelMessenger(new BroadcastChannel(channel.name), new BroadcastChannel(channel.name))
+                const name = (option as BroadcastChannel).name // newly create BroadcastChannel, to bypass blocking of self-posted message listening
+                return new BroadcastChannelMessenger(new BroadcastChannel(name), new BroadcastChannel(name))
             }
             case globalThis.MessagePort: {
                 send = listen = option as MessagePort
