@@ -1,3 +1,3 @@
-import { initMessageHub } from "../dist/index.js"
+import { initMessageHub } from "./index.js"
 
 initMessageHub()
