@@ -9,7 +9,7 @@
 		"dist"
 	],
 	"scripts": {
-		"build": "tsc && esbuild --target=es2020 --bundle src/index.ts --format=esm --outdir=dist"
+		"build": "tsc && esbuild --target=es2020 --bundle src/index.ts --format=esm --outdir=dist && copy dist\\index.js iframe\\index.js"
 	},
 	"repository": {
 		"type": "git",

@@ -1,6 +1,7 @@
 import { BroadcastChannelMessenger } from "./broadcastchannel"
 import { MessageListenable, MessageSendable, Messenger, MessengerOption } from "./message"
 import { MessageHub } from "./broadcastchannel"
+import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
 export class MessengerFactory {
     private constructor() { }
@@ -13,36 +14,38 @@ export class MessengerFactory {
 
         switch (option.constructor) {
             case globalThis.ServiceWorker: {
-                send = option as ServiceWorker
                 listen = window.navigator.serviceWorker // listen from ServiceWorkerContainer
+                send = option as ServiceWorker
                 break
             }
             case globalThis.ServiceWorkerContainer: {
-                send = (option as ServiceWorkerContainer).controller!
                 listen = option as ServiceWorkerContainer
+                send = (option as ServiceWorkerContainer).controller!
                 break
             }
             case globalThis.ServiceWorkerGlobalScope: {
-                send = undefined // only can response from e.source
                 listen = option as ServiceWorkerGlobalScope
+                send = undefined // only can response from e.source
                 break
             }
             case globalThis.Worker: {
-                send = listen = option as Worker
+                listen = send = option as Worker
                 break
             }
             case globalThis.DedicatedWorkerGlobalScope: {
-                send = listen = option as DedicatedWorkerGlobalScope
+                listen = send = option as DedicatedWorkerGlobalScope
                 break
             }
             case globalThis.Window: {
-                send = option as Window // target window
+                const targetWindow = option as Window
+                if (targetWindow.origin !== window.origin) return new CrossOriginWindowMessenger(window, targetWindow);
                 listen = window // listen window itself
+                send = targetWindow // target window
                 break
             }
             case globalThis.Client: {
-                send = option as Client
                 listen = self as DedicatedWorkerGlobalScope // listen itself
+                send = option as Client
                 break
             }
             case globalThis.BroadcastChannel: {
@@ -50,7 +53,7 @@ export class MessengerFactory {
                 return new BroadcastChannelMessenger(new BroadcastChannel(name), new BroadcastChannel(name))
             }
             case globalThis.MessagePort: {
-                send = listen = option as MessagePort
+                listen = send = option as MessagePort
                 break
             }
         }

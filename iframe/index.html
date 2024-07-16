@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cross-Origin Iframe MessageHub</title>
     <script type="module">
-        import { initMessageHub, MessengerFactory } from "../dist/index.js"
+        import { initMessageHub, MessengerFactory } from "./index.js"
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register(location.origin + '/service-worker.js', { type: "module" }).then(
@@ -21,7 +21,7 @@
         }
 
         window.MessengerFactory = MessengerFactory
-        window.test = ((target = new BroadcastChannel("a"), name = "post-together") => {
+        window.test = ((target = new BroadcastChannel("test"), name = "post-together") => {
             (async () => {
                 target.addEventListener("message", console.log)
                 const messenger = MessengerFactory.new(target)
