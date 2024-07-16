@@ -132,7 +132,7 @@ class WindowMessageHub extends AbstractMessageHub {
         if (serviceWorkerContainer.controller) {
             this.target = MessengerFactory.new(serviceWorkerContainer)
         } 
-        // window -> iframe(cross-origin)
+        // window -> iframe(cross-origin) (-> service worker(cross-origin))
         else {
             let iframeload = false
             const _this = this
