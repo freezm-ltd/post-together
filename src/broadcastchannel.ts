@@ -2,7 +2,7 @@ import { EventTarget2 } from "@freezm-ltd/event-target-2";
 import { IDENTIFIER, Message, MessageHandler, MessageId, Messenger, MessageType, unwrapMessage, MessageHandlerWrapped, MessagePayload, MessengerOption } from "./message";
 import { MessengerFactory } from "src.ts";
 
-export const MessageHubCrossOriginIframeURL = ""
+export const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/"
 
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
