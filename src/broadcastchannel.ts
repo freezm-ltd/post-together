@@ -152,7 +152,9 @@ class WindowMessageHub extends AbstractMessageHub {
         this.addListen(window)
         // worker <--> window; inject listener code to prototype, to backward message to worker
         // TODO: Worker prototype injection needed?
-        // ... this.addForward(workers)
+        // ex ...
+        // const worker = new Worker(...)
+        // this.addListen(worker)
     }
 }
 
