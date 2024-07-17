@@ -185,7 +185,7 @@ var Messenger = class {
 };
 
 // src/broadcastchannel.ts
-var MessageHubCrossOriginIframeURL = "";
+var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
 var BroadcastChannelMessenger = class extends Messenger {
@@ -423,6 +423,8 @@ function workerWithMessageHub(scriptURL, options) {
   return worker;
 }
 export {
+  BroadcastChannelMessenger,
+  Messenger,
   MessengerFactory,
   initMessageHub,
   workerWithMessageHub

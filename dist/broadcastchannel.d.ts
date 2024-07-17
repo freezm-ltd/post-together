@@ -1,6 +1,6 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2";
 import { Message, MessageHandler, MessageId, Messenger, MessageType, MessageHandlerWrapped, MessagePayload, MessengerOption } from "./message";
-export declare const MessageHubCrossOriginIframeURL = "";
+export declare const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 export declare class BroadcastChannelMessenger extends Messenger {
     protected _send(message: Message): Promise<void>;
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped;

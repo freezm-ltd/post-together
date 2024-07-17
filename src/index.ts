@@ -76,3 +76,8 @@ export function workerWithMessageHub(scriptURL: string | URL, options?: WorkerOp
     MessageHub.instance.addListen(worker)
     return worker
 }
+
+export {
+    BroadcastChannelMessenger,
+    Messenger
+}
