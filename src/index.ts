@@ -79,5 +79,6 @@ export function workerWithMessageHub(scriptURL: string | URL, options?: WorkerOp
 
 export {
     BroadcastChannelMessenger,
-    Messenger
+    Messenger,
+    MessageHub
 }

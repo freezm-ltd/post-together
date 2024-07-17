@@ -424,6 +424,7 @@ function workerWithMessageHub(scriptURL, options) {
 }
 export {
   BroadcastChannelMessenger,
+  MessageHub,
   Messenger,
   MessengerFactory,
   initMessageHub,
