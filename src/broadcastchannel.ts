@@ -153,6 +153,7 @@ class DedicatedWorkerMessageHub extends AbstractMessageHub {
 
 class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
+        if (globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
         this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
     }
 
@@ -185,7 +186,7 @@ class WindowMessageHub extends AbstractMessageHub {
     async _init() {
         // window -> service worker(same-origin)
         // block same-origin MessageHub just for now, for stableness
-        if (window.origin === MessageHubCrossOriginIframeOrigin && globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
+        if (window.origin === MessageHubCrossOriginIframeOrigin) await this._initSameOrigin();
         // window -> iframe(cross-origin) (-> service worker(cross-origin))
         else await this._initCrossOrigin()
         // add forward requests from other window -> this window

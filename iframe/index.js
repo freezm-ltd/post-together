@@ -321,6 +321,7 @@ var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
 };
 var WindowMessageHub = class extends AbstractMessageHub {
   async _initSameOrigin() {
+    if (globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
     this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
   }
   async _initCrossOrigin() {
@@ -347,7 +348,7 @@ var WindowMessageHub = class extends AbstractMessageHub {
   }
   // worker/window -> window -> iframe/serviceworker -> window -> worker/window
   async _init() {
-    if (window.origin === MessageHubCrossOriginIframeOrigin && globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
+    if (window.origin === MessageHubCrossOriginIframeOrigin) await this._initSameOrigin();
     else await this._initCrossOrigin();
     this.addListen(window);
     const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
