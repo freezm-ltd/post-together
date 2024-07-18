@@ -26,6 +26,7 @@ export function unwrapMessage(e: Event) {
 
 // message handler type
 export type MessageHandler = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => PromiseLike<MessagePayload> | MessagePayload
+export type MessageCallback = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => void
 export type MessageEventListener = (e: MessageCustomEvent) => any
 export type MessageHandlerWrapped = (e: Event) => void
 
@@ -64,12 +65,12 @@ export class Messenger {
     }
 
     // listen for response
-    protected responseCallback(request: Message, callback: (responsePayload: MessagePayload) => any) {
+    protected responseCallback(request: Message, callback: MessageCallback) {
         const listener = (e: Event) => {
             const response = unwrapMessage(e)
             if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
                 this.listenFrom.removeEventListener("message", listener)
-                callback(response.payload)
+                callback(response.payload.data, response.payload.transfer)
             }
         }
         this.listenFrom.addEventListener("message", listener)
@@ -88,7 +89,6 @@ export class Messenger {
     protected async _send(message: Message, event?: Event) {
         const option = { transfer: message.payload.transfer }
         if (isIframe()) Object.assign(option, { targetOrigin: "*" });
-        console.log(this._getSendTo(event), message, option)
         this._getSendTo(event).postMessage(message, option) // send request
     }
 
@@ -96,7 +96,7 @@ export class Messenger {
     request(type: MessageType, payload: MessagePayload): Promise<MessagePayload> {
         return new Promise(async (resolve) => {
             const message = this.createRequest(type, payload)
-            this.responseCallback(message, resolve) // listen for response
+            this.responseCallback(message, (data, transfer) => resolve({ data, transfer })) // listen for response
             await this._send(message) // send request
         })
     }
@@ -107,7 +107,7 @@ export class Messenger {
         return async (e: Event) => {
             const request = unwrapMessage(e)
             if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
-                const payload = await handler(request.payload, request.payload.transfer)
+                const payload = await handler(request.payload.data, request.payload.transfer)
                 const response = this.createResponse(request, payload)
                 await this._send(response, e)
             }

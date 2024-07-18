@@ -1,5 +1,5 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2";
-import { IDENTIFIER, Message, MessageHandler, MessageId, Messenger, MessageType, unwrapMessage, MessageHandlerWrapped, MessagePayload, MessengerOption } from "./message";
+import { IDENTIFIER, Message, MessageHandler, MessageId, Messenger, MessageType, unwrapMessage, MessageHandlerWrapped, MessagePayload, MessengerOption, MessageCallback } from "./message";
 import { MessengerFactory } from "src.ts";
 import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
@@ -39,14 +39,14 @@ export class BroadcastChannelMessenger extends Messenger {
         }
     }
 
-    protected responseCallback(request: Message, callback: (responsePayload: MessagePayload) => any) {
+    protected responseCallback(request: Message, callback: MessageCallback) {
         const listener = async (e: Event) => {
             const response = unwrapMessage(e)
             if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
                 // if metadata (no payload)
                 if (!response.payload) await this._injectPayload(response);
                 this.listenFrom.removeEventListener("message", listener)
-                callback(response.payload)
+                callback(response.payload.data, response.payload.transfer)
             }
         }
         this.listenFrom.addEventListener("message", listener)
@@ -58,7 +58,7 @@ export class BroadcastChannelMessenger extends Messenger {
             if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
                 // if metadata (no payload)
                 if (!request.payload) await this._injectPayload(request);
-                const payload = await handler(request.payload, request.payload.transfer)
+                const payload = await handler(request.payload.data, request.payload.transfer)
                 const response = this.createResponse(request, payload)
                 await this._send(response)
             }
@@ -118,12 +118,12 @@ export abstract class AbstractMessageHub extends EventTarget2 {
         const listenTarget = MessengerFactory.new(listenFrom)
         this.listenFroms.add(listenFrom)
         // store message
-        listenTarget.response(MessageStoreMessageType, async (payload: { data: Message }) => {
-            return await this.store(payload.data)
+        listenTarget.response(MessageStoreMessageType, async (data: Message) => {
+            return await this.store(data)
         })
         // fetch message
-        listenTarget.response(MessageFetchMessageType, async (payload: { data: string }) => {
-            return await this.fetch(payload.data)
+        listenTarget.response(MessageFetchMessageType, async (data: string) => {
+            return await this.fetch(data)
         })
     }
 }
@@ -143,9 +143,9 @@ class ServiceWorkerMessageHub extends AbstractMessageHub {
     }
 
     async fetch(id: MessageId) {
-        let message = this.storage.get(id)
-        if (!message) return { data: "error" };
-        return message
+        let payload = this.storage.get(id)
+        if (!payload) return { data: "error" };
+        return payload
     }
 }
 

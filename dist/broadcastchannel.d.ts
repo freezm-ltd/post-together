@@ -1,11 +1,11 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2";
-import { Message, MessageHandler, MessageId, Messenger, MessageType, MessageHandlerWrapped, MessagePayload, MessengerOption } from "./message";
+import { Message, MessageHandler, MessageId, Messenger, MessageType, MessageHandlerWrapped, MessagePayload, MessengerOption, MessageCallback } from "./message";
 export declare const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 export declare function isIframe(origin?: string): boolean;
 export declare class BroadcastChannelMessenger extends Messenger {
     protected _injectPayload(metadata: Message): Promise<void>;
     protected _send(message: Message): Promise<void>;
-    protected responseCallback(request: Message, callback: (responsePayload: MessagePayload) => any): void;
+    protected responseCallback(request: Message, callback: MessageCallback): void;
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped;
 }
 export declare abstract class AbstractMessageHub extends EventTarget2 {

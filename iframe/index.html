@@ -32,6 +32,10 @@
         window.test = ((name = "post-together") => {
             (async () => {
                 const transferables = [new ReadableStream(), new ArrayBuffer(10), (new MessageChannel()).port1]
+                messenger.response("test", (data, transfer) => {
+                    console.log(`request received:`, data, transfer)
+                    return { data: { chat: `Hello, ${data.name}!! I touched your transferbles:`, transferables: data.transferables }, transfer: data.transferables }
+                })
                 // send request
                 const response = await messenger.request("test", { data: { name, transferables }, transfer: transferables })
                 console.log(`response received:`, response)
@@ -39,10 +43,7 @@
         })
 
         const worker = new Worker("./dedicated-worker.js", { type: "module" })
-        console.log(MessageHub.instance)
         MessageHub.addListen(worker)
-
-        window.addEventListener("message", console.log)
     </script>
 </head>
 

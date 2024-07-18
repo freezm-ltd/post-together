@@ -126,7 +126,7 @@ var Messenger = class {
       const response = unwrapMessage(e);
       if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
         this.listenFrom.removeEventListener("message", listener);
-        callback(response.payload);
+        callback(response.payload.data, response.payload.transfer);
       }
     };
     this.listenFrom.addEventListener("message", listener);
@@ -143,14 +143,13 @@ var Messenger = class {
   async _send(message, event) {
     const option = { transfer: message.payload.transfer };
     if (isIframe()) Object.assign(option, { targetOrigin: "*" });
-    console.log(this._getSendTo(event), message, option);
     this._getSendTo(event).postMessage(message, option);
   }
   // send message and get response
   request(type, payload) {
     return new Promise(async (resolve) => {
       const message = this.createRequest(type, payload);
-      this.responseCallback(message, resolve);
+      this.responseCallback(message, (data, transfer) => resolve({ data, transfer }));
       await this._send(message);
     });
   }
@@ -158,7 +157,7 @@ var Messenger = class {
     return async (e) => {
       const request = unwrapMessage(e);
       if (request && request.type === type && request.__type === "request" && this.activated) {
-        const payload = await handler(request.payload, request.payload.transfer);
+        const payload = await handler(request.payload.data, request.payload.transfer);
         const response = this.createResponse(request, payload);
         await this._send(response, e);
       }
@@ -235,7 +234,7 @@ var BroadcastChannelMessenger = class extends Messenger {
       if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
         if (!response.payload) await this._injectPayload(response);
         this.listenFrom.removeEventListener("message", listener);
-        callback(response.payload);
+        callback(response.payload.data, response.payload.transfer);
       }
     };
     this.listenFrom.addEventListener("message", listener);
@@ -245,7 +244,7 @@ var BroadcastChannelMessenger = class extends Messenger {
       const request = unwrapMessage(e);
       if (request && request.type === type && request.__type === "request" && this.activated) {
         if (!request.payload) await this._injectPayload(request);
-        const payload = await handler(request.payload, request.payload.transfer);
+        const payload = await handler(request.payload.data, request.payload.transfer);
         const response = this.createResponse(request, payload);
         await this._send(response);
       }
@@ -294,11 +293,11 @@ var AbstractMessageHub = class extends EventTarget2 {
     if (this.listenFroms.has(listenFrom)) return;
     const listenTarget = MessengerFactory.new(listenFrom);
     this.listenFroms.add(listenFrom);
-    listenTarget.response(MessageStoreMessageType, async (payload) => {
-      return await this.store(payload.data);
+    listenTarget.response(MessageStoreMessageType, async (data) => {
+      return await this.store(data);
     });
-    listenTarget.response(MessageFetchMessageType, async (payload) => {
-      return await this.fetch(payload.data);
+    listenTarget.response(MessageFetchMessageType, async (data) => {
+      return await this.fetch(data);
     });
   }
 };
@@ -317,9 +316,9 @@ var ServiceWorkerMessageHub = class extends AbstractMessageHub {
     return { data: "success" };
   }
   async fetch(id) {
-    let message = this.storage.get(id);
-    if (!message) return { data: "error" };
-    return message;
+    let payload = this.storage.get(id);
+    if (!payload) return { data: "error" };
+    return payload;
   }
 };
 var DedicatedWorkerMessageHub = class extends AbstractMessageHub {

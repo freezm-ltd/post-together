@@ -20,6 +20,7 @@ export type MessagePayloadTransferable = Transferable[];
 export declare function isMessageCustomEvent(e: Event): e is MessageCustomEvent;
 export declare function unwrapMessage(e: Event): Message | undefined;
 export type MessageHandler = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => PromiseLike<MessagePayload> | MessagePayload;
+export type MessageCallback = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => void;
 export type MessageEventListener = (e: MessageCustomEvent) => any;
 export type MessageHandlerWrapped = (e: Event) => void;
 export type MessengerOption = ServiceWorker | ServiceWorkerContainer | ServiceWorkerGlobalScope | Worker | DedicatedWorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort;
@@ -34,7 +35,7 @@ export declare class Messenger {
     constructor(listenFrom: MessageListenable, sendTo?: MessageSendable | undefined);
     protected createRequest(type: MessageType, payload: MessagePayload): Message;
     protected createResponse(request: Message, payload: MessagePayload): Message;
-    protected responseCallback(request: Message, callback: (responsePayload: MessagePayload) => any): void;
+    protected responseCallback(request: Message, callback: MessageCallback): void;
     protected _getSendTo(event?: Event): MessageSendable;
     protected _send(message: Message, event?: Event): Promise<void>;
     request(type: MessageType, payload: MessagePayload): Promise<MessagePayload>;
