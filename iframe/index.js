@@ -200,7 +200,6 @@ var CrossOriginWindowMessenger = class extends Messenger {
 // src/broadcastchannel.ts
 var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 var MessageHubCrossOriginIframeOrigin = new URL(MessageHubCrossOriginIframeURL).origin;
-var MessageHubSameOriginServiceWorkerBroadcastChannelName = `${IDENTIFIER}:bc:sw.controllerchange`;
 var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
 var BroadcastChannelMessenger = class extends Messenger {
@@ -298,9 +297,6 @@ var ServiceWorkerMessageHub = class extends AbstractMessageHub {
   // add listen; requests from windows -> serviceworker
   async _init() {
     this.addListen(self);
-    const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
-    channel.postMessage(true);
-    console.log("posted sw");
   }
   // service worker is MessageHub storage itself
   async store(message) {
@@ -351,8 +347,6 @@ var WindowMessageHub = class extends AbstractMessageHub {
     if (window.origin === MessageHubCrossOriginIframeOrigin) await this._initSameOrigin();
     else await this._initCrossOrigin();
     this.addListen(window);
-    const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
-    channel.onmessage = () => this._initSameOrigin();
   }
 };
 var MessageHub = class _MessageHub extends AbstractMessageHub {

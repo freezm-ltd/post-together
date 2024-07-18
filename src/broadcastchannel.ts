@@ -5,7 +5,6 @@ import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
 export const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/"
 const MessageHubCrossOriginIframeOrigin = (new URL(MessageHubCrossOriginIframeURL)).origin
-const MessageHubSameOriginServiceWorkerBroadcastChannelName = `${IDENTIFIER}:bc:sw.controllerchange`
 
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
@@ -125,10 +124,6 @@ class ServiceWorkerMessageHub extends AbstractMessageHub {
     // add listen; requests from windows -> serviceworker
     async _init() {
         this.addListen(self as ServiceWorkerGlobalScope)
-        
-        const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName)
-        channel.postMessage(true)
-        console.log("posted sw")
     }
 
     // service worker is MessageHub storage itself
@@ -153,7 +148,7 @@ class DedicatedWorkerMessageHub extends AbstractMessageHub {
 
 class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
-        if (globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
+        if (!globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
         this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
     }
 
@@ -196,10 +191,6 @@ class WindowMessageHub extends AbstractMessageHub {
         // ex)
         // const worker = new Worker(...)
         // this.addListen(worker)
-
-        // service worker changes -> initSameOrigin
-        const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName)
-        channel.onmessage = () => this._initSameOrigin()
     }
 }
 
