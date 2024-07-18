@@ -5,6 +5,13 @@ import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
 export const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/"
 const MessageHubCrossOriginIframeOrigin = (new URL(MessageHubCrossOriginIframeURL)).origin
+export function isIframe(origin?: string) {
+    if (globalThis.constructor === globalThis.Window) {
+        if (!origin) origin = window.origin;
+        return origin === MessageHubCrossOriginIframeOrigin
+    }
+    return false
+}
 
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
@@ -13,7 +20,7 @@ export class BroadcastChannelMessenger extends Messenger {
     protected async _injectPayload(metadata: Message) {
         const { id } = metadata
         // fetch message payload
-        const payload = await MessageHub.instance.fetch(id)
+        const payload = await MessageHub.fetch(id)
         if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
         // payload inject to message
         metadata.payload = payload
@@ -23,7 +30,7 @@ export class BroadcastChannelMessenger extends Messenger {
         if (message.payload.transfer) {
             const { payload, ...metadata } = message
             // store message
-            const response = await MessageHub.instance.store(message)
+            const response = await MessageHub.store(message)
             if (response.data !== "success") throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
             // send metadata only (without payload which includes transferables)
             this._getSendTo().postMessage(metadata)
@@ -103,10 +110,13 @@ export abstract class AbstractMessageHub extends EventTarget2 {
         }
     }
 
+    protected listenFroms: Set<MessengerOption> = new Set()
     // listen request
     async addListen(listenFrom: MessengerOption) {
         await this.init()
+        if (this.listenFroms.has(listenFrom)) return;
         const listenTarget = MessengerFactory.new(listenFrom)
+        this.listenFroms.add(listenFrom)
         // store message
         listenTarget.response(MessageStoreMessageType, async (payload: { data: Message }) => {
             return await this.store(payload.data)
@@ -155,19 +165,16 @@ class WindowMessageHub extends AbstractMessageHub {
 
     async _initCrossOrigin() {
         let iframeload = false
-
-        const _this = this
         const iframe = document.createElement("iframe")
-        iframe.onload = async () => {
-            const listener = (e: ExtendableMessageEvent) => {
-                if (e.data === "loadend") {
-                    iframeload = true
-                    _this.dispatch("iframeloadend")
-                    window.removeEventListener("message", listener)
-                }
+
+        const listener = (e: ExtendableMessageEvent) => {
+            if (isIframe(e.origin) && e.data === "loadend") {
+                iframeload = true
+                this.dispatch("iframeloadend")
+                window.removeEventListener("message", listener)
             }
-            window.addEventListener("message", listener)
         }
+        window.addEventListener("message", listener)
         iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
         iframe.style.display = "none"
         document.body.appendChild(iframe)
@@ -180,7 +187,7 @@ class WindowMessageHub extends AbstractMessageHub {
     async _init() {
         // window -> service worker(same-origin)
         // block same-origin MessageHub just for now, for stableness
-        if (window.origin === MessageHubCrossOriginIframeOrigin) await this._initSameOrigin();
+        if (isIframe()) await this._initSameOrigin();
         // window -> iframe(cross-origin) (-> service worker(cross-origin))
         else await this._initCrossOrigin()
         // add forward requests from other window -> this window
@@ -194,12 +201,11 @@ class WindowMessageHub extends AbstractMessageHub {
 }
 
 // singleton
-export class MessageHub extends AbstractMessageHub {
+export class MessageHub {
     private static _instance: MessageHub
-    hub?: AbstractMessageHub
+    private hub?: AbstractMessageHub
 
     private constructor() {
-        super()
         this.changeHub()
     }
 
@@ -228,11 +234,15 @@ export class MessageHub extends AbstractMessageHub {
         return MessageHub._instance
     }
 
-    async store(message: Message): Promise<MessagePayload> {
-        return this.hub!.store(message)
+    static async store(message: Message): Promise<MessagePayload> {
+        return this.instance.hub!.store(message)
     }
 
-    async fetch(id: MessageId): Promise<MessagePayload> {
-        return this.hub!.fetch(id)
+    static async fetch(id: MessageId): Promise<MessagePayload> {
+        return this.instance.hub!.fetch(id)
+    }
+
+    static async addListen(listenFrom: MessengerOption) {
+        return this.instance.hub!.addListen(listenFrom)
     }
 }

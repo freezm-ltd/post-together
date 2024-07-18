@@ -1,3 +1,4 @@
+import { isIframe } from "./broadcastchannel"
 import { generateId } from "./utils"
 
 export const IDENTIFIER = "post-together"
@@ -85,7 +86,9 @@ export class Messenger {
 
     // send message
     protected async _send(message: Message, event?: Event) {
-        this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer }) // send request
+        const option = { transfer: message.payload.transfer }
+        if (isIframe()) Object.assign(option, { targetOrigin: "*" });
+        this._getSendTo(event).postMessage(message, option) // send request
     }
 
     // send message and get response

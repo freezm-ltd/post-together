@@ -141,7 +141,9 @@ var Messenger = class {
   }
   // send message
   async _send(message, event) {
-    this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer });
+    const option = { transfer: message.payload.transfer };
+    if (isIframe()) Object.assign(option, { targetOrigin: "*" });
+    this._getSendTo(event).postMessage(message, option);
   }
   // send message and get response
   request(type, payload) {
@@ -200,19 +202,26 @@ var CrossOriginWindowMessenger = class extends Messenger {
 // src/broadcastchannel.ts
 var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 var MessageHubCrossOriginIframeOrigin = new URL(MessageHubCrossOriginIframeURL).origin;
+function isIframe(origin) {
+  if (globalThis.constructor === globalThis.Window) {
+    if (!origin) origin = window.origin;
+    return origin === MessageHubCrossOriginIframeOrigin;
+  }
+  return false;
+}
 var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
 var BroadcastChannelMessenger = class extends Messenger {
   async _injectPayload(metadata) {
     const { id } = metadata;
-    const payload = await MessageHub.instance.fetch(id);
+    const payload = await MessageHub.fetch(id);
     if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
     metadata.payload = payload;
   }
   async _send(message) {
     if (message.payload.transfer) {
       const { payload, ...metadata } = message;
-      const response = await MessageHub.instance.store(message);
+      const response = await MessageHub.store(message);
       if (response.data !== "success") throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
       this._getSendTo().postMessage(metadata);
     } else {
@@ -247,6 +256,7 @@ var AbstractMessageHub = class extends EventTarget2 {
     super();
     // message store/fetch request target
     this.state = "off";
+    this.listenFroms = /* @__PURE__ */ new Set();
     this.init();
   }
   async init() {
@@ -280,7 +290,9 @@ var AbstractMessageHub = class extends EventTarget2 {
   // listen request
   async addListen(listenFrom) {
     await this.init();
+    if (this.listenFroms.has(listenFrom)) return;
     const listenTarget = MessengerFactory.new(listenFrom);
+    this.listenFroms.add(listenFrom);
     listenTarget.response(MessageStoreMessageType, async (payload) => {
       return await this.store(payload.data);
     });
@@ -323,18 +335,15 @@ var WindowMessageHub = class extends AbstractMessageHub {
   }
   async _initCrossOrigin() {
     let iframeload = false;
-    const _this = this;
     const iframe = document.createElement("iframe");
-    iframe.onload = async () => {
-      const listener = (e) => {
-        if (e.data === "loadend") {
-          iframeload = true;
-          _this.dispatch("iframeloadend");
-          window.removeEventListener("message", listener);
-        }
-      };
-      window.addEventListener("message", listener);
+    const listener = (e) => {
+      if (isIframe(e.origin) && e.data === "loadend") {
+        iframeload = true;
+        this.dispatch("iframeloadend");
+        window.removeEventListener("message", listener);
+      }
     };
+    window.addEventListener("message", listener);
     iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
     iframe.style.display = "none";
     document.body.appendChild(iframe);
@@ -343,14 +352,13 @@ var WindowMessageHub = class extends AbstractMessageHub {
   }
   // worker/window -> window -> iframe/serviceworker -> window -> worker/window
   async _init() {
-    if (window.origin === MessageHubCrossOriginIframeOrigin) await this._initSameOrigin();
+    if (isIframe()) await this._initSameOrigin();
     else await this._initCrossOrigin();
     this.addListen(window);
   }
 };
-var MessageHub = class _MessageHub extends AbstractMessageHub {
+var MessageHub = class _MessageHub {
   constructor() {
-    super();
     this.changeHub();
   }
   changeHub() {
@@ -375,11 +383,14 @@ var MessageHub = class _MessageHub extends AbstractMessageHub {
     this.init();
     return _MessageHub._instance;
   }
-  async store(message) {
-    return this.hub.store(message);
+  static async store(message) {
+    return this.instance.hub.store(message);
   }
-  async fetch(id) {
-    return this.hub.fetch(id);
+  static async fetch(id) {
+    return this.instance.hub.fetch(id);
+  }
+  static async addListen(listenFrom) {
+    return this.instance.hub.addListen(listenFrom);
   }
 };
 
@@ -409,7 +420,7 @@ var MessengerFactory = class {
       }
       case globalThis.Worker: {
         listen = send = option;
-        MessageHub.instance.addListen(option);
+        MessageHub.addListen(option);
         break;
       }
       case globalThis.DedicatedWorkerGlobalScope: {

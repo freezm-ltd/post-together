@@ -31,7 +31,7 @@ export class MessengerFactory {
             case globalThis.Worker: {
                 listen = send = option as Worker
                 // automatic listen for MessageHub
-                MessageHub.instance.addListen(option)
+                MessageHub.addListen(option)
                 break
             }
             case globalThis.DedicatedWorkerGlobalScope: {

@@ -25,11 +25,9 @@
     </script>
 
     <script type="module">
-        new Worker("./dedicated-worker.js", { type: "module" })
 
         const target = new BroadcastChannel("test")
         const messenger = MessengerFactory.new(target)
-        target.addEventListener("message", console.log)
 
         window.test = ((name = "post-together") => {
             (async () => {
@@ -40,7 +38,11 @@
             })()
         })
 
+        const worker = new Worker("./dedicated-worker.js", { type: "module" })
         console.log(MessageHub.instance)
+        MessageHub.addListen(worker)
+
+        window.addEventListener("message", console.log)
     </script>
 </head>
 
