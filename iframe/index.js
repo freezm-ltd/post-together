@@ -380,6 +380,7 @@ var MessengerFactory = class {
       }
       case globalThis.Worker: {
         listen = send = option;
+        MessageHub.instance.addListen(option);
         break;
       }
       case globalThis.DedicatedWorkerGlobalScope: {
@@ -417,16 +418,10 @@ var MessengerFactory = class {
 function initMessageHub() {
   MessageHub.init();
 }
-function workerWithMessageHub(scriptURL, options) {
-  const worker = new Worker(scriptURL, options);
-  MessageHub.instance.addListen(worker);
-  return worker;
-}
 export {
   BroadcastChannelMessenger,
   MessageHub,
   Messenger,
   MessengerFactory,
-  initMessageHub,
-  workerWithMessageHub
+  initMessageHub
 };

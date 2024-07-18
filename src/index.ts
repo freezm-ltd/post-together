@@ -30,6 +30,8 @@ export class MessengerFactory {
             }
             case globalThis.Worker: {
                 listen = send = option as Worker
+                // automatic listen for MessageHub
+                MessageHub.instance.addListen(option)
                 break
             }
             case globalThis.DedicatedWorkerGlobalScope: {
@@ -68,13 +70,6 @@ export class MessengerFactory {
 
 export function initMessageHub() {
     MessageHub.init()
-}
-
-// connect (child) worker to parent
-export function workerWithMessageHub(scriptURL: string | URL, options?: WorkerOptions) {
-    const worker = new Worker(scriptURL, options)
-    MessageHub.instance.addListen(worker)
-    return worker
 }
 
 export {
