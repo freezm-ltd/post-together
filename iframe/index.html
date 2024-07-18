@@ -20,9 +20,15 @@
             );
         }
 
-        new Worker("./dedicated-worker.js", { type: "module" })
+        MessengerFactory.new(window).response("reload-need", (data) => {
+            return { data: !navigator.serviceWorker.controller }
+        })
 
         window.MessengerFactory = MessengerFactory
+    </script>
+
+    <script type="module">
+        new Worker("./dedicated-worker.js", { type: "module" })
 
         const target = new BroadcastChannel("test")
         const messenger = MessengerFactory.new(target)
@@ -37,7 +43,7 @@
             })()
         })
 
-       console.log(MessageHub.instance)
+        console.log(MessageHub.instance)
     </script>
 </head>
 

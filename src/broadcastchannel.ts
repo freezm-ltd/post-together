@@ -4,6 +4,7 @@ import { MessengerFactory } from "src.ts";
 import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
 export const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/"
+const MessageHubCrossOriginIframeOrigin = (new URL(MessageHubCrossOriginIframeURL)).origin
 const MessageHubSameOriginServiceWorkerBroadcastChannelName = `${IDENTIFIER}:bc:sw.controllerchange`
 
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
@@ -127,6 +128,7 @@ class ServiceWorkerMessageHub extends AbstractMessageHub {
         
         const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName)
         channel.postMessage(true)
+        console.log("posted sw")
     }
 
     // service worker is MessageHub storage itself
@@ -152,28 +154,37 @@ class DedicatedWorkerMessageHub extends AbstractMessageHub {
 class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
         this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
+        console.log("changed to same-origin:", this.target)
     }
 
     async _initCrossOrigin() {
         let iframeload = false
+
         const _this = this
         const iframe = document.createElement("iframe")
-        iframe.onload = () => {
+        iframe.onload = async () => {
             const iframeWindow = iframe.contentWindow!
-            _this.target = new CrossOriginWindowMessenger(window, iframeWindow, (new URL(MessageHubCrossOriginIframeURL)).origin);
-            iframeload = true
-            _this.dispatch("iframeload")
+            _this.target = new CrossOriginWindowMessenger(window, iframeWindow, MessageHubCrossOriginIframeOrigin);
+            const reloadNeed = await _this.target.request("reload-need", { data: undefined })
+            if (reloadNeed.data) {
+                iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
+            } else {
+                iframeload = true
+                _this.dispatch("iframeload")
+            }
         }
         iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
         iframe.style.display = "none"
         document.body.appendChild(iframe)
+
         if (!iframeload) await this.waitFor("iframeload");
     }
 
     // worker/window -> window -> iframe/serviceworker -> window -> worker/window
     async _init() {
         // window -> service worker(same-origin)
-        if (globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
+        // block same-origin MessageHub just for now, for stableness
+        if (window.origin === MessageHubCrossOriginIframeOrigin && globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
         // window -> iframe(cross-origin) (-> service worker(cross-origin))
         else await this._initCrossOrigin()
         // add forward requests from other window -> this window

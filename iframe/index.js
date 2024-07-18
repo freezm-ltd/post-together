@@ -199,6 +199,7 @@ var CrossOriginWindowMessenger = class extends Messenger {
 
 // src/broadcastchannel.ts
 var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
+var MessageHubCrossOriginIframeOrigin = new URL(MessageHubCrossOriginIframeURL).origin;
 var MessageHubSameOriginServiceWorkerBroadcastChannelName = `${IDENTIFIER}:bc:sw.controllerchange`;
 var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
@@ -299,6 +300,7 @@ var ServiceWorkerMessageHub = class extends AbstractMessageHub {
     this.addListen(self);
     const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
     channel.postMessage(true);
+    console.log("posted sw");
   }
   // service worker is MessageHub storage itself
   async store(message) {
@@ -320,16 +322,22 @@ var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
 var WindowMessageHub = class extends AbstractMessageHub {
   async _initSameOrigin() {
     this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
+    console.log("changed to same-origin:", this.target);
   }
   async _initCrossOrigin() {
     let iframeload = false;
     const _this = this;
     const iframe = document.createElement("iframe");
-    iframe.onload = () => {
+    iframe.onload = async () => {
       const iframeWindow = iframe.contentWindow;
-      _this.target = new CrossOriginWindowMessenger(window, iframeWindow, new URL(MessageHubCrossOriginIframeURL).origin);
-      iframeload = true;
-      _this.dispatch("iframeload");
+      _this.target = new CrossOriginWindowMessenger(window, iframeWindow, MessageHubCrossOriginIframeOrigin);
+      const reloadNeed = await _this.target.request("reload-need", { data: void 0 });
+      if (reloadNeed.data) {
+        iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
+      } else {
+        iframeload = true;
+        _this.dispatch("iframeload");
+      }
     };
     iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
     iframe.style.display = "none";
@@ -338,7 +346,7 @@ var WindowMessageHub = class extends AbstractMessageHub {
   }
   // worker/window -> window -> iframe/serviceworker -> window -> worker/window
   async _init() {
-    if (globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
+    if (window.origin === MessageHubCrossOriginIframeOrigin && globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
     else await this._initCrossOrigin();
     this.addListen(window);
     const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
@@ -440,14 +448,7 @@ var MessengerFactory = class {
     }
   }
 };
-(function initMessageHub() {
-  if (globalThis.constructor === globalThis.Window) {
-    navigator.serviceWorker.addEventListener("controllerchange", (e) => {
-      MessageHub.init();
-    });
-  }
-  MessageHub.init();
-})();
+MessageHub.init();
 export {
   BroadcastChannelMessenger,
   MessageHub,

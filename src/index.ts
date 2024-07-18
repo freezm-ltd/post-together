@@ -70,14 +70,7 @@ export class MessengerFactory {
 }
 
 // automatic init MessageHub
-(function initMessageHub() {
-    if (globalThis.constructor === globalThis.Window) {
-        navigator.serviceWorker.addEventListener("controllerchange", (e) => {
-            MessageHub.init()
-        })
-    }
-    MessageHub.init()
-})()
+MessageHub.init()
 
 export {
     BroadcastChannelMessenger,
