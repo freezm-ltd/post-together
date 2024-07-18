@@ -317,7 +317,7 @@ var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
 };
 var WindowMessageHub = class extends AbstractMessageHub {
   async _initSameOrigin() {
-    if (globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
+    if (!globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
     this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
   }
   async _initCrossOrigin() {
