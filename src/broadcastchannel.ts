@@ -45,7 +45,7 @@ export class BroadcastChannelMessenger extends Messenger {
 // forward messages to MessageHub(not in service worker) or store/fetch messages MessageHub(in service worker)
 export abstract class AbstractMessageHub extends EventTarget2 {
     protected target: Messenger | undefined // message store/fetch request target
-    private initNeed = true
+    state: "off" | "initializing" | "on" = "off"
 
     constructor() {
         super()
@@ -53,8 +53,11 @@ export abstract class AbstractMessageHub extends EventTarget2 {
     }
 
     private async init() {
+        if (this.state === "on") return;
+        if (this.state === "initializing") return await this.waitFor("done");
+        this.state = "initializing"
         await this._init()
-        this.initNeed = false
+        this.state = "on"
         this.dispatch("done")
     }
 
@@ -63,7 +66,7 @@ export abstract class AbstractMessageHub extends EventTarget2 {
     }
 
     async store(message: Message): Promise<MessagePayload> {
-        if (!this.initNeed) await this.waitFor("done");
+        await this.init()
         const response = await this.target!.request(MessageStoreMessageType, { data: message, transfer: message.payload.transfer })
         if (response && response.data === "success") {
             return response
@@ -73,7 +76,7 @@ export abstract class AbstractMessageHub extends EventTarget2 {
     }
 
     async fetch(id: MessageId): Promise<MessagePayload> {
-        if (!this.initNeed) await this.waitFor("done");
+        await this.init()
         const response = await this.target!.request(MessageFetchMessageType, { data: id })
         if (response && response.data !== "error") {
             return response.data
@@ -83,7 +86,8 @@ export abstract class AbstractMessageHub extends EventTarget2 {
     }
 
     // listen request
-    addListen(listenFrom: MessengerOption) {
+    async addListen(listenFrom: MessengerOption) {
+        await this.init()
         const listenTarget = MessengerFactory.new(listenFrom)
         // store message
         listenTarget.response(MessageStoreMessageType, async (message: Message) => {

@@ -7,13 +7,13 @@ export declare class BroadcastChannelMessenger extends Messenger {
 }
 export declare abstract class AbstractMessageHub extends EventTarget2 {
     protected target: Messenger | undefined;
-    private initNeed;
+    state: "off" | "initializing" | "on";
     constructor();
     private init;
     protected _init(): Promise<void>;
     store(message: Message): Promise<MessagePayload>;
     fetch(id: MessageId): Promise<MessagePayload>;
-    addListen(listenFrom: MessengerOption): void;
+    addListen(listenFrom: MessengerOption): Promise<void>;
 }
 export declare class MessageHub extends AbstractMessageHub {
     private static _instance;

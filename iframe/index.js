@@ -220,18 +220,21 @@ var AbstractMessageHub = class extends EventTarget2 {
   constructor() {
     super();
     // message store/fetch request target
-    this.initNeed = true;
+    this.state = "off";
     this.init();
   }
   async init() {
+    if (this.state === "on") return;
+    if (this.state === "initializing") return await this.waitFor("done");
+    this.state = "initializing";
     await this._init();
-    this.initNeed = false;
+    this.state = "on";
     this.dispatch("done");
   }
   async _init() {
   }
   async store(message) {
-    if (!this.initNeed) await this.waitFor("done");
+    await this.init();
     const response = await this.target.request(MessageStoreMessageType, { data: message, transfer: message.payload.transfer });
     if (response && response.data === "success") {
       return response;
@@ -240,7 +243,7 @@ var AbstractMessageHub = class extends EventTarget2 {
     }
   }
   async fetch(id) {
-    if (!this.initNeed) await this.waitFor("done");
+    await this.init();
     const response = await this.target.request(MessageFetchMessageType, { data: id });
     if (response && response.data !== "error") {
       return response.data;
@@ -249,7 +252,8 @@ var AbstractMessageHub = class extends EventTarget2 {
     }
   }
   // listen request
-  addListen(listenFrom) {
+  async addListen(listenFrom) {
+    await this.init();
     const listenTarget = MessengerFactory.new(listenFrom);
     listenTarget.response(MessageStoreMessageType, async (message) => {
       return await this.store(message);
