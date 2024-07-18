@@ -88,6 +88,7 @@ export class Messenger {
     protected async _send(message: Message, event?: Event) {
         const option = { transfer: message.payload.transfer }
         if (isIframe()) Object.assign(option, { targetOrigin: "*" });
+        console.log(this._getSendTo(event), message, option)
         this._getSendTo(event).postMessage(message, option) // send request
     }
 

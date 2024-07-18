@@ -143,6 +143,7 @@ var Messenger = class {
   async _send(message, event) {
     const option = { transfer: message.payload.transfer };
     if (isIframe()) Object.assign(option, { targetOrigin: "*" });
+    console.log(this._getSendTo(event), message, option);
     this._getSendTo(event).postMessage(message, option);
   }
   // send message and get response
@@ -329,9 +330,16 @@ var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
 };
 var WindowMessageHub = class extends AbstractMessageHub {
   async _initSameOrigin() {
-    if (!globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
-    this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
-    window.parent.postMessage("loadend", { targetOrigin: "*" });
+    if (!globalThis.navigator.serviceWorker.controller) {
+      setTimeout(() => {
+        window.location.assign(window.location.href);
+      }, 1e3);
+      await new Promise(() => {
+      });
+    } else {
+      this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
+      window.parent.postMessage("loadend", { targetOrigin: "*" });
+    }
   }
   async _initCrossOrigin() {
     let iframeload = false;

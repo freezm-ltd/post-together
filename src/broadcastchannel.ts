@@ -158,9 +158,15 @@ class DedicatedWorkerMessageHub extends AbstractMessageHub {
 
 class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
-        if (!globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
-        this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
-        window.parent.postMessage("loadend", { targetOrigin: "*" })
+        if (!globalThis.navigator.serviceWorker.controller) {
+            setTimeout(() => {
+                window.location.assign(window.location.href)
+            }, 1000);
+            await new Promise(() => {})
+        } else {
+            this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
+            window.parent.postMessage("loadend", { targetOrigin: "*" })
+        }
     }
 
     async _initCrossOrigin() {
