@@ -6,13 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cross-Origin Iframe MessageHub</title>
     <script type="module">
-        import { initMessageHub, MessengerFactory } from "./index.js"
+        import { MessengerFactory, MessageHub } from "./index.js"
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./service-worker.js', { type: "module" }).then(
                 (registration) => {
                     console.log("Service worker registration succeeded:", registration);
-                    initMessageHub()
+                    MessageHub.init()
                 },
                 (error) => {
                     console.log(`Service worker registration failed: ${error}`);
