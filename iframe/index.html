@@ -20,10 +20,6 @@
             );
         }
 
-        MessengerFactory.new(window).response("reload-need", (data) => {
-            return { data: !navigator.serviceWorker.controller }
-        })
-
         window.MessengerFactory = MessengerFactory
         window.MessageHub = MessageHub
     </script>

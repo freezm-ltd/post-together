@@ -319,26 +319,27 @@ var WindowMessageHub = class extends AbstractMessageHub {
   async _initSameOrigin() {
     if (!globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
     this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
-    window.parent.postMessage("loadend");
+    window.parent.postMessage("loadend", { targetOrigin: "*" });
   }
   async _initCrossOrigin() {
     let iframeload = false;
     const _this = this;
     const iframe = document.createElement("iframe");
     iframe.onload = async () => {
-      const iframeWindow = iframe.contentWindow;
-      _this.target = new CrossOriginWindowMessenger(window, iframeWindow, MessageHubCrossOriginIframeOrigin);
-      window.addEventListener("message", (e) => {
+      const listener = (e) => {
         if (e.data === "loadend") {
           iframeload = true;
-          _this.dispatch("iframeload");
+          _this.dispatch("iframeloadend");
+          window.removeEventListener("message", listener);
         }
-      });
+      };
+      window.addEventListener("message", listener);
     };
     iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
     iframe.style.display = "none";
     document.body.appendChild(iframe);
-    if (!iframeload) await this.waitFor("iframeload");
+    if (!iframeload) await this.waitFor("iframeloadend");
+    this.target = new CrossOriginWindowMessenger(window, iframe.contentWindow, MessageHubCrossOriginIframeOrigin);
   }
   // worker/window -> window -> iframe/serviceworker -> window -> worker/window
   async _init() {
