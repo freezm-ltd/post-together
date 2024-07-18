@@ -12,7 +12,7 @@
             navigator.serviceWorker.register('./service-worker.js', { type: "module" }).then(
                 (registration) => {
                     console.log("Service worker registration succeeded:", registration);
-                    MessageHub.init()
+                    navigator.serviceWorker.addEventListener("message", console.log)
                 },
                 (error) => {
                     console.log(`Service worker registration failed: ${error}`);
@@ -20,21 +20,24 @@
             );
         }
 
+        new Worker("./dedicated-worker.js", { type: "module" })
+
         window.MessengerFactory = MessengerFactory
-        window.test = ((target = new BroadcastChannel("test"), name = "post-together") => {
+
+        const target = new BroadcastChannel("test")
+        const messenger = MessengerFactory.new(target)
+        target.addEventListener("message", console.log)
+
+        window.test = ((name = "post-together") => {
             (async () => {
-                target.addEventListener("message", console.log)
-                const messenger = MessengerFactory.new(target)
-                // setup response
-                messenger.response("test", (d) => {
-                    console.log(`request received: ${d.data}`)
-                    return { data: `Hello, ${name}!!` }
-                })
+                const transferables = [new ReadableStream(), new ArrayBuffer(10), (new MessageChannel()).port1]
                 // send request
-                const response = await messenger.request("test", { data: `Hello, I'm ${name}!!` })
-                console.log(`response received: ${response.data}`)
+                const response = await messenger.request("test", { data: { name, transferables }, transfer: transferables })
+                console.log(`response received:`, response)
             })()
         })
+
+       console.log(MessageHub.instance)
     </script>
 </head>
 

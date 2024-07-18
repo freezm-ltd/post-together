@@ -90,7 +90,7 @@ function generateId() {
 // src/message.ts
 var IDENTIFIER = "post-together";
 function isMessage(data) {
-  return data.id && data.type && data.payload && data.__identifier === IDENTIFIER;
+  return data.id && data.type && data.__identifier === IDENTIFIER;
 }
 function isMessageCustomEvent(e) {
   return "data" in e && isMessage(e.data);
@@ -184,11 +184,31 @@ var Messenger = class {
   }
 };
 
+// src/crossoriginwindow.ts
+var CrossOriginWindowMessenger = class extends Messenger {
+  constructor(listenFrom, sendTo, sendToOrigin) {
+    super(listenFrom, sendTo);
+    this.listenFrom = listenFrom;
+    this.sendTo = sendTo;
+    this.sendToOrigin = sendToOrigin;
+  }
+  async _send(message, event) {
+    this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer, targetOrigin: this.sendToOrigin });
+  }
+};
+
 // src/broadcastchannel.ts
 var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
+var MessageHubSameOriginServiceWorkerBroadcastChannelName = `${IDENTIFIER}:bc:sw.controllerchange`;
 var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
 var BroadcastChannelMessenger = class extends Messenger {
+  async _injectPayload(metadata) {
+    const { id } = metadata;
+    const payload = await MessageHub.instance.fetch(id);
+    if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
+    metadata.payload = payload;
+  }
   async _send(message) {
     if (message.payload.transfer) {
       const { payload, ...metadata } = message;
@@ -199,16 +219,22 @@ var BroadcastChannelMessenger = class extends Messenger {
       this._getSendTo().postMessage(message);
     }
   }
+  responseCallback(request, callback) {
+    const listener = async (e) => {
+      const response = unwrapMessage(e);
+      if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
+        if (!response.payload) await this._injectPayload(response);
+        this.listenFrom.removeEventListener("message", listener);
+        callback(response.payload);
+      }
+    };
+    this.listenFrom.addEventListener("message", listener);
+  }
   wrapMessageHandler(type, handler) {
     return async (e) => {
       const request = unwrapMessage(e);
       if (request && request.type === type && request.__type === "request" && this.activated) {
-        if (!request.payload) {
-          const { id } = request;
-          const payload2 = await MessageHub.instance.fetch(id);
-          if (payload2.data === "error") throw new Error("BroadcastChannelMessengerListenError: MessageHub fetch failed.");
-          request.payload = payload2;
-        }
+        if (!request.payload) await this._injectPayload(request);
         const payload = await handler(request.payload, request.payload.transfer);
         const response = this.createResponse(request, payload);
         await this._send(response);
@@ -245,7 +271,7 @@ var AbstractMessageHub = class extends EventTarget2 {
   async fetch(id) {
     await this.init();
     const response = await this.target.request(MessageFetchMessageType, { data: id });
-    if (response && response.data !== "error") {
+    if (response && response.data !== "error" && response.transfer) {
       return response.data;
     } else {
       throw new Error("MessageHubFetchError: MessagHub returned corrupted or unsuccessful response.");
@@ -255,11 +281,11 @@ var AbstractMessageHub = class extends EventTarget2 {
   async addListen(listenFrom) {
     await this.init();
     const listenTarget = MessengerFactory.new(listenFrom);
-    listenTarget.response(MessageStoreMessageType, async (message) => {
-      return await this.store(message);
+    listenTarget.response(MessageStoreMessageType, async (payload) => {
+      return await this.store(payload.data);
     });
-    listenTarget.response(MessageFetchMessageType, async (id) => {
-      return await this.fetch(id);
+    listenTarget.response(MessageFetchMessageType, async (payload) => {
+      return await this.fetch(payload.data);
     });
   }
 };
@@ -271,6 +297,8 @@ var ServiceWorkerMessageHub = class extends AbstractMessageHub {
   // add listen; requests from windows -> serviceworker
   async _init() {
     this.addListen(self);
+    const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
+    channel.postMessage(true);
   }
   // service worker is MessageHub storage itself
   async store(message) {
@@ -278,9 +306,9 @@ var ServiceWorkerMessageHub = class extends AbstractMessageHub {
     return { data: "success" };
   }
   async fetch(id) {
-    let payload = this.storage.get(id);
-    if (!payload) payload = { data: "error" };
-    return payload;
+    let message = this.storage.get(id);
+    if (!message) return { data: "error" };
+    return message;
   }
 };
 var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
@@ -290,32 +318,39 @@ var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
   }
 };
 var WindowMessageHub = class extends AbstractMessageHub {
+  async _initSameOrigin() {
+    this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
+  }
+  async _initCrossOrigin() {
+    let iframeload = false;
+    const _this = this;
+    const iframe = document.createElement("iframe");
+    iframe.onload = () => {
+      const iframeWindow = iframe.contentWindow;
+      _this.target = new CrossOriginWindowMessenger(window, iframeWindow, new URL(MessageHubCrossOriginIframeURL).origin);
+      iframeload = true;
+      _this.dispatch("iframeload");
+    };
+    iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
+    iframe.style.display = "none";
+    document.body.appendChild(iframe);
+    if (!iframeload) await this.waitFor("iframeload");
+  }
   // worker/window -> window -> iframe/serviceworker -> window -> worker/window
   async _init() {
-    const serviceWorkerContainer = globalThis.navigator.serviceWorker;
-    if (serviceWorkerContainer.controller) {
-      this.target = MessengerFactory.new(serviceWorkerContainer);
-    } else {
-      let iframeload = false;
-      const _this = this;
-      const iframe = document.createElement("iframe");
-      iframe.onload = () => {
-        const iframeWindow = iframe.contentWindow;
-        _this.target = MessengerFactory.new(iframeWindow);
-        iframeload = true;
-        _this.dispatch("iframeload");
-      };
-      iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
-      iframe.style.display = "none";
-      document.body.appendChild(iframe);
-      if (!iframeload) await this.waitFor("iframeload");
-    }
+    if (globalThis.navigator.serviceWorker.controller) await this._initSameOrigin();
+    else await this._initCrossOrigin();
     this.addListen(window);
+    const channel = new BroadcastChannel(MessageHubSameOriginServiceWorkerBroadcastChannelName);
+    channel.onmessage = () => this._initSameOrigin();
   }
 };
 var MessageHub = class _MessageHub extends AbstractMessageHub {
   constructor() {
     super();
+    this.changeHub();
+  }
+  changeHub() {
     switch (globalThis.constructor) {
       case globalThis.ServiceWorkerGlobalScope:
         this.hub = new ServiceWorkerMessageHub();
@@ -342,19 +377,6 @@ var MessageHub = class _MessageHub extends AbstractMessageHub {
   }
   async fetch(id) {
     return this.hub.fetch(id);
-  }
-};
-
-// src/crossoriginwindow.ts
-var CrossOriginWindowMessenger = class extends Messenger {
-  constructor(listenFrom, sendTo) {
-    super(listenFrom, sendTo);
-    this.listenFrom = listenFrom;
-    this.sendTo = sendTo;
-    this.sendToOrigin = sendTo.origin;
-  }
-  async _send(message, event) {
-    this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer, targetOrigin: this.sendToOrigin });
   }
 };
 
@@ -393,7 +415,6 @@ var MessengerFactory = class {
       }
       case globalThis.Window: {
         const targetWindow = option;
-        if (targetWindow.origin !== window.origin) return new CrossOriginWindowMessenger(window, targetWindow);
         listen = window;
         send = targetWindow;
         break;
@@ -419,6 +440,14 @@ var MessengerFactory = class {
     }
   }
 };
+(function initMessageHub() {
+  if (globalThis.constructor === globalThis.Window) {
+    navigator.serviceWorker.addEventListener("controllerchange", (e) => {
+      MessageHub.init();
+    });
+  }
+  MessageHub.init();
+})();
 export {
   BroadcastChannelMessenger,
   MessageHub,

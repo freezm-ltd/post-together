@@ -5,7 +5,7 @@ export const IDENTIFIER = "post-together"
 // message types
 export type Message = { id: MessageId, type: MessageType, payload: MessagePayload, __type: MessageInternalType, __identifier: typeof IDENTIFIER }
 export function isMessage(data: any) {
-    return data.id && data.type && data.payload && data.__identifier === IDENTIFIER // check whether message should be processed
+    return data.id && data.type && data.__identifier === IDENTIFIER // check whether message should be processed
 }
 export type MessageCustomEvent = MessageEvent<Message>
 export type MessageType = string

@@ -40,7 +40,8 @@ export class MessengerFactory {
             }
             case globalThis.Window: {
                 const targetWindow = option as Window
-                if (targetWindow.origin !== window.origin) return new CrossOriginWindowMessenger(window, targetWindow);
+                // cannot accessing a cross-origin frame...
+                //if (targetWindow.origin !== window.origin) return new CrossOriginWindowMessenger(window, targetWindow);
                 listen = window // listen window itself
                 send = targetWindow // target window
                 break
@@ -67,6 +68,16 @@ export class MessengerFactory {
         }
     }
 }
+
+// automatic init MessageHub
+(function initMessageHub() {
+    if (globalThis.constructor === globalThis.Window) {
+        navigator.serviceWorker.addEventListener("controllerchange", (e) => {
+            MessageHub.init()
+        })
+    }
+    MessageHub.init()
+})()
 
 export {
     BroadcastChannelMessenger,

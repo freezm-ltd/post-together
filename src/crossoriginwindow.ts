@@ -1,13 +1,12 @@
 import { Message, Messenger } from "./message";
 
 export class CrossOriginWindowMessenger extends Messenger {
-    readonly sendToOrigin: string
     constructor(
         readonly listenFrom: Window,
         readonly sendTo: Window, // if not specified, independent request is blocked, can do only responsing
+        readonly sendToOrigin: string,
     ) {
         super(listenFrom, sendTo)
-        this.sendToOrigin = sendTo.origin
     }
 
     protected async _send(message: Message, event?: Event) {
