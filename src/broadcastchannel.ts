@@ -150,6 +150,7 @@ class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
         if (!globalThis.navigator.serviceWorker.controller) window.location.assign(window.location.href);
         this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
+        window.parent.postMessage("loadend")
     }
 
     async _initCrossOrigin() {
@@ -160,15 +161,12 @@ class WindowMessageHub extends AbstractMessageHub {
         iframe.onload = async () => {
             const iframeWindow = iframe.contentWindow!
             _this.target = new CrossOriginWindowMessenger(window, iframeWindow, MessageHubCrossOriginIframeOrigin);
-            const reloadNeed = await _this.target.request("reload-need", { data: undefined })
-            if (reloadNeed.data) {
-                setTimeout(() => {
-                    iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
-                }, 1000);
-            } else {
-                iframeload = true
-                _this.dispatch("iframeload")
-            }
+            window.addEventListener("message", (e) => {
+                if (e.data === "loadend") {
+                    iframeload = true
+                    _this.dispatch("iframeload")
+                }
+            })
         }
         iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
         iframe.style.display = "none"
