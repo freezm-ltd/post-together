@@ -1,6 +1,6 @@
-import { initMessageHub } from "./index.js"
+import { MessageHub } from "./index.js"
 
-initMessageHub()
+MessageHub.init()
 
 self.addEventListener("install", () => {
     self.skipWaiting();
