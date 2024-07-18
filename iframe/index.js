@@ -283,7 +283,7 @@ var AbstractMessageHub = class extends EventTarget2 {
     await this.init();
     const response = await this.target.request(MessageFetchMessageType, { data: id });
     if (response && response.data !== "error" && response.transfer) {
-      return response.data;
+      return response;
     } else {
       throw new Error("MessageHubFetchError: MessagHub returned corrupted or unsuccessful response.");
     }
