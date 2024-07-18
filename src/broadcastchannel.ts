@@ -154,7 +154,6 @@ class DedicatedWorkerMessageHub extends AbstractMessageHub {
 class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
         this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
-        console.log("changed to same-origin:", this.target)
     }
 
     async _initCrossOrigin() {
@@ -167,7 +166,9 @@ class WindowMessageHub extends AbstractMessageHub {
             _this.target = new CrossOriginWindowMessenger(window, iframeWindow, MessageHubCrossOriginIframeOrigin);
             const reloadNeed = await _this.target.request("reload-need", { data: undefined })
             if (reloadNeed.data) {
-                iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
+                setTimeout(() => {
+                    iframe.setAttribute("src", MessageHubCrossOriginIframeURL)
+                }, 1000);
             } else {
                 iframeload = true
                 _this.dispatch("iframeload")

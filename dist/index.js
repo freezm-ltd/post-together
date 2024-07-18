@@ -322,7 +322,6 @@ var DedicatedWorkerMessageHub = class extends AbstractMessageHub {
 var WindowMessageHub = class extends AbstractMessageHub {
   async _initSameOrigin() {
     this.target = MessengerFactory.new(globalThis.navigator.serviceWorker);
-    console.log("changed to same-origin:", this.target);
   }
   async _initCrossOrigin() {
     let iframeload = false;
@@ -333,7 +332,9 @@ var WindowMessageHub = class extends AbstractMessageHub {
       _this.target = new CrossOriginWindowMessenger(window, iframeWindow, MessageHubCrossOriginIframeOrigin);
       const reloadNeed = await _this.target.request("reload-need", { data: void 0 });
       if (reloadNeed.data) {
-        iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
+        setTimeout(() => {
+          iframe.setAttribute("src", MessageHubCrossOriginIframeURL);
+        }, 1e3);
       } else {
         iframeload = true;
         _this.dispatch("iframeload");
