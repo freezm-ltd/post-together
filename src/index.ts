@@ -68,10 +68,6 @@ export class MessengerFactory {
     }
 }
 
-export function initMessageHub() {
-    MessageHub.init()
-}
-
 export {
     BroadcastChannelMessenger,
     Messenger,

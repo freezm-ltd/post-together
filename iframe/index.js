@@ -415,13 +415,9 @@ var MessengerFactory = class {
     }
   }
 };
-function initMessageHub() {
-  MessageHub.init();
-}
 export {
   BroadcastChannelMessenger,
   MessageHub,
   Messenger,
-  MessengerFactory,
-  initMessageHub
+  MessengerFactory
 };

@@ -5,5 +5,4 @@ export declare class MessengerFactory {
     private constructor();
     static new(option: MessengerOption): Messenger;
 }
-export declare function initMessageHub(): void;
 export { BroadcastChannelMessenger, Messenger, MessageHub };
