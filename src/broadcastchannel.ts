@@ -158,14 +158,14 @@ class DedicatedWorkerMessageHub extends AbstractMessageHub {
 
 class WindowMessageHub extends AbstractMessageHub {
     async _initSameOrigin() {
-        if (!globalThis.navigator.serviceWorker.controller) {
-            setTimeout(() => {
+        if (!globalThis.navigator.serviceWorker.controller) { // servie worker doesn't have control of this page
+            setTimeout(() => { // throttle to block rapid and massive reloading loop
                 window.location.assign(window.location.href)
             }, 1000);
-            await new Promise(() => {})
-        } else {
+            await new Promise(() => {}) // wait forever
+        } else { // can access service worker -> can use MessageHub
             this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
-            window.parent.postMessage("loadend", { targetOrigin: "*" })
+            window.parent.postMessage("loadend", { targetOrigin: "*" }) // loadend -> parent MessageHub initializing end
         }
     }
 
