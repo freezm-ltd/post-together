@@ -25,30 +25,29 @@
     </script>
 
     <script type="module">
+        window.test = async () => {
+            const target = new BroadcastChannel("test")
+            const messenger = MessengerFactory.new(target)
 
-        const target = new BroadcastChannel("test")
-        const messenger = MessengerFactory.new(target)
+            const worker = new Worker("./dedicated-worker.js", { type: "module" })
+            MessageHub.addListen(worker)
 
-        window.test = ((name = "post-together") => {
-            (async () => {
-                const transferables = [new ReadableStream(), new ArrayBuffer(10), (new MessageChannel()).port1]
-                messenger.response("test", (data, transfer) => {
-                    console.log(`request received:`, data, transfer)
-                    return { data: { chat: `Hello, ${data.name}!! I touched your transferbles:`, transferables: data.transferables }, transfer: data.transferables }
-                })
-                // send request
-                const response = await messenger.request("test", { data: { name, transferables }, transfer: transferables })
-                console.log(`response received:`, response)
-            })()
-        })
+            const name = "post-together"
+            const transferables = [new ReadableStream(), new ArrayBuffer(10), (new MessageChannel()).port1]
 
-        const worker = new Worker("./dedicated-worker.js", { type: "module" })
-        MessageHub.addListen(worker)
+            messenger.response("test", (data, transfer) => {
+                console.log(`request received:`, data, transfer)
+                return { data: { chat: `Hello, ${data.name}!! I touched your transferbles:`, transferables: data.transferables }, transfer: data.transferables }
+            })
+            // send request
+            const response = await messenger.request("test", { data: { name, transferables }, transfer: transferables })
+            console.log(`response received:`, response)
+        }
     </script>
 </head>
 
 <body>
-    <h1>HELLO</h1>
+    <p>This is mitm proxy of MessageHub. Click <a href="https://github.com/freezm-ltd/post-together" target="_blank">here</a> to read more information.</p>
 </body>
 
 </html>
