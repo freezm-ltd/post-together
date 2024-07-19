@@ -113,7 +113,8 @@ export class Messenger {
     }
 
     // wrap message handler (request -> response)
-    protected listenTargetWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped> = new WeakMap()
+    protected listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped> = new WeakMap()
+    protected listenerSet: Set<MessageHandler> = new Set()
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped {
         return async (e: Event) => {
             const request = unwrapMessage(e)
@@ -128,15 +129,24 @@ export class Messenger {
 
     // get request and give response
     response(type: MessageType, handler: MessageHandler) {
+        if (this.listenerSet.has(handler)) throw new Error("MessengerAddEventListenerError: this message handler already attached");
         const wrapped = this.wrapMessageHandler(type, handler)
-        this.listenTargetWeakMap.set(handler, wrapped)
+        this.listenerWeakMap.set(handler, wrapped)
+        this.listenerSet.add(handler)
         this.listenFrom.addEventListener("message", wrapped)
     }
 
     // remove response handler
-    deresponse(handler: MessageHandler) {
-        const wrapped = this.listenTargetWeakMap.get(handler)
-        if (wrapped) this.listenFrom.removeEventListener("message", wrapped);
+    deresponse(handler?: MessageHandler) {
+        const iterator = handler ? [handler] : this.listenerSet
+        for (let handler of iterator) {
+            const wrapped = this.listenerWeakMap.get(handler)
+            if (wrapped) {
+                this.listenFrom.removeEventListener("message", wrapped);
+                this.listenerWeakMap.delete(handler)
+            }
+            this.listenerSet.delete(handler)
+        }
     }
 
     // re-activate message handling

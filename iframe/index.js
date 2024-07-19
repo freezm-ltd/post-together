@@ -108,7 +108,8 @@ var Messenger = class {
     //protected readonly listenTarget: MessageListenTarget
     this.activated = true;
     // wrap message handler (request -> response)
-    this.listenTargetWeakMap = /* @__PURE__ */ new WeakMap();
+    this.listenerWeakMap = /* @__PURE__ */ new WeakMap();
+    this.listenerSet = /* @__PURE__ */ new Set();
   }
   // create request message from type and payload
   createRequest(type, payload) {
@@ -175,14 +176,23 @@ var Messenger = class {
   }
   // get request and give response
   response(type, handler) {
+    if (this.listenerSet.has(handler)) throw new Error("MessengerAddEventListenerError: this message handler already attached");
     const wrapped = this.wrapMessageHandler(type, handler);
-    this.listenTargetWeakMap.set(handler, wrapped);
+    this.listenerWeakMap.set(handler, wrapped);
+    this.listenerSet.add(handler);
     this.listenFrom.addEventListener("message", wrapped);
   }
   // remove response handler
   deresponse(handler) {
-    const wrapped = this.listenTargetWeakMap.get(handler);
-    if (wrapped) this.listenFrom.removeEventListener("message", wrapped);
+    const iterator = handler ? [handler] : this.listenerSet;
+    for (let handler2 of iterator) {
+      const wrapped = this.listenerWeakMap.get(handler2);
+      if (wrapped) {
+        this.listenFrom.removeEventListener("message", wrapped);
+        this.listenerWeakMap.delete(handler2);
+      }
+      this.listenerSet.delete(handler2);
+    }
   }
   // re-activate message handling
   activate() {

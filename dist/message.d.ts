@@ -40,10 +40,11 @@ export declare class Messenger {
     protected _getSendTo(event?: Event): MessageSendable;
     protected _send(message: Message, event?: Event): Promise<void>;
     request(type: MessageType, payload: MessagePayload, timeout?: number): Promise<MessagePayload>;
-    protected listenTargetWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped>;
+    protected listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped>;
+    protected listenerSet: Set<MessageHandler>;
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped;
     response(type: MessageType, handler: MessageHandler): void;
-    deresponse(handler: MessageHandler): void;
+    deresponse(handler?: MessageHandler): void;
     activate(): void;
     deactivate(): void;
 }
