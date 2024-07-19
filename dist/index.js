@@ -120,16 +120,21 @@ var Messenger = class {
     const { id, type, __identifier } = request;
     return { id, type, payload, __type: "response", __identifier };
   }
+  // inject informations to message
+  async _inject(message) {
+  }
   // listen for response
   responseCallback(request, callback) {
-    const listener = (e) => {
+    const listener = async (e) => {
       const response = unwrapMessage(e);
       if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
+        await this._inject(response);
         this.listenFrom.removeEventListener("message", listener);
         callback(response.payload.data, response.payload.transfer);
       }
     };
     this.listenFrom.addEventListener("message", listener);
+    return () => this.listenFrom.removeEventListener("message", listener);
   }
   _getSendTo(event) {
     let sendTo = this.sendTo;
@@ -146,17 +151,22 @@ var Messenger = class {
     this._getSendTo(event).postMessage(message, option);
   }
   // send message and get response
-  request(type, payload) {
-    return new Promise(async (resolve) => {
+  request(type, payload, timeout = 5e3) {
+    return new Promise(async (resolve, reject) => {
       const message = this.createRequest(type, payload);
-      this.responseCallback(message, (data, transfer) => resolve({ data, transfer }));
+      const rejector = this.responseCallback(message, (data, transfer) => resolve({ data, transfer }));
       await this._send(message);
+      setTimeout(() => {
+        rejector();
+        reject(`MessengerRequestTimeoutError: request timeout reached: ${timeout}ms`);
+      }, timeout);
     });
   }
   wrapMessageHandler(type, handler) {
     return async (e) => {
       const request = unwrapMessage(e);
       if (request && request.type === type && request.__type === "request" && this.activated) {
+        await this._inject(request);
         const payload = await handler(request.payload.data, request.payload.transfer);
         const response = this.createResponse(request, payload);
         await this._send(response, e);
@@ -212,11 +222,12 @@ function isIframe(origin) {
 var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
 var BroadcastChannelMessenger = class extends Messenger {
-  async _injectPayload(metadata) {
-    const { id } = metadata;
+  async _inject(message) {
+    if (message.payload) return;
+    const { id } = message;
     const payload = await MessageHub.fetch(id);
     if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
-    metadata.payload = payload;
+    message.payload = payload;
   }
   async _send(message) {
     if (message.payload.transfer) {
@@ -227,28 +238,6 @@ var BroadcastChannelMessenger = class extends Messenger {
     } else {
       this._getSendTo().postMessage(message);
     }
-  }
-  responseCallback(request, callback) {
-    const listener = async (e) => {
-      const response = unwrapMessage(e);
-      if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
-        if (!response.payload) await this._injectPayload(response);
-        this.listenFrom.removeEventListener("message", listener);
-        callback(response.payload.data, response.payload.transfer);
-      }
-    };
-    this.listenFrom.addEventListener("message", listener);
-  }
-  wrapMessageHandler(type, handler) {
-    return async (e) => {
-      const request = unwrapMessage(e);
-      if (request && request.type === type && request.__type === "request" && this.activated) {
-        if (!request.payload) await this._injectPayload(request);
-        const payload = await handler(request.payload.data, request.payload.transfer);
-        const response = this.createResponse(request, payload);
-        await this._send(response);
-      }
-    };
   }
 };
 var AbstractMessageHub = class extends EventTarget2 {

@@ -64,16 +64,23 @@ export class Messenger {
         return { id, type, payload, __type: "response", __identifier }
     }
 
+    // inject informations to message
+    protected async _inject(message: Message) {
+        // nothing
+    }
+
     // listen for response
-    protected responseCallback(request: Message, callback: MessageCallback) {
-        const listener = (e: Event) => {
+    protected responseCallback(request: Message, callback: MessageCallback): () => void {
+        const listener = async (e: Event) => {
             const response = unwrapMessage(e)
             if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
+                await this._inject(response); // inject if need
                 this.listenFrom.removeEventListener("message", listener)
                 callback(response.payload.data, response.payload.transfer)
             }
         }
         this.listenFrom.addEventListener("message", listener)
+        return () => this.listenFrom.removeEventListener("message", listener) // for early reject, remove listener only
     }
 
     protected _getSendTo(event?: Event): MessageSendable {
@@ -93,11 +100,15 @@ export class Messenger {
     }
 
     // send message and get response
-    request(type: MessageType, payload: MessagePayload): Promise<MessagePayload> {
-        return new Promise(async (resolve) => {
+    request(type: MessageType, payload: MessagePayload, timeout: number = 5000): Promise<MessagePayload> {
+        return new Promise(async (resolve, reject) => {
             const message = this.createRequest(type, payload)
-            this.responseCallback(message, (data, transfer) => resolve({ data, transfer })) // listen for response
+            const rejector = this.responseCallback(message, (data, transfer) => resolve({ data, transfer })) // listen for response
             await this._send(message) // send request
+            setTimeout(() => {
+                rejector() // remove event listener
+                reject(`MessengerRequestTimeoutError: request timeout reached: ${timeout}ms`)
+            }, timeout); // set timeout
         })
     }
 
@@ -107,6 +118,7 @@ export class Messenger {
         return async (e: Event) => {
             const request = unwrapMessage(e)
             if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
+                await this._inject(request); // inject if need
                 const payload = await handler(request.payload.data, request.payload.transfer)
                 const response = this.createResponse(request, payload)
                 await this._send(response, e)

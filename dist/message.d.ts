@@ -35,10 +35,11 @@ export declare class Messenger {
     constructor(listenFrom: MessageListenable, sendTo?: MessageSendable | undefined);
     protected createRequest(type: MessageType, payload: MessagePayload): Message;
     protected createResponse(request: Message, payload: MessagePayload): Message;
-    protected responseCallback(request: Message, callback: MessageCallback): void;
+    protected _inject(message: Message): Promise<void>;
+    protected responseCallback(request: Message, callback: MessageCallback): () => void;
     protected _getSendTo(event?: Event): MessageSendable;
     protected _send(message: Message, event?: Event): Promise<void>;
-    request(type: MessageType, payload: MessagePayload): Promise<MessagePayload>;
+    request(type: MessageType, payload: MessagePayload, timeout?: number): Promise<MessagePayload>;
     protected listenTargetWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped>;
     protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped;
     response(type: MessageType, handler: MessageHandler): void;

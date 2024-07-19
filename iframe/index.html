@@ -12,7 +12,6 @@
             navigator.serviceWorker.register('./service-worker.js', { type: "module" }).then(
                 (registration) => {
                     console.log("Service worker registration succeeded:", registration);
-                    navigator.serviceWorker.addEventListener("message", console.log)
                 },
                 (error) => {
                     console.log(`Service worker registration failed: ${error}`);
@@ -25,20 +24,24 @@
     </script>
 
     <script type="module">
+        let workerInit = false
+
+        function initWorker() {
+            if (workerInit) return;
+            workerInit = true
+            const worker = new Worker("./dedicated-worker.js", { type: "module" })
+            return MessageHub.addListen(worker)
+        }
+
         window.test = async () => {
+            await initWorker()
+
             const target = new BroadcastChannel("test")
             const messenger = MessengerFactory.new(target)
 
-            const worker = new Worker("./dedicated-worker.js", { type: "module" })
-            MessageHub.addListen(worker)
-
             const name = "post-together"
-            const transferables = [new ReadableStream(), new ArrayBuffer(10), (new MessageChannel()).port1]
-
-            messenger.response("test", (data, transfer) => {
-                console.log(`request received:`, data, transfer)
-                return { data: { chat: `Hello, ${data.name}!! I touched your transferbles:`, transferables: data.transferables }, transfer: data.transferables }
-            })
+            const transferables = [new ReadableStream(), new ArrayBuffer(100000000), (new MessageChannel()).port1]
+            
             // send request
             const response = await messenger.request("test", { data: { name, transferables }, transfer: transferables })
             console.log(`response received:`, response)

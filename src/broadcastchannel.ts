@@ -17,13 +17,14 @@ const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
 
 export class BroadcastChannelMessenger extends Messenger {
-    protected async _injectPayload(metadata: Message) {
-        const { id } = metadata
+    protected async _inject(message: Message) { // inject payload to message(metadata only)
+        if (message.payload) return; // inject not required
+        const { id } = message
         // fetch message payload
         const payload = await MessageHub.fetch(id)
         if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
         // payload inject to message
-        metadata.payload = payload
+        message.payload = payload
     }
 
     protected async _send(message: Message): Promise<void> {
@@ -36,32 +37,6 @@ export class BroadcastChannelMessenger extends Messenger {
             this._getSendTo().postMessage(metadata)
         } else {
             this._getSendTo().postMessage(message) // without payload, send normally
-        }
-    }
-
-    protected responseCallback(request: Message, callback: MessageCallback) {
-        const listener = async (e: Event) => {
-            const response = unwrapMessage(e)
-            if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
-                // if metadata (no payload)
-                if (!response.payload) await this._injectPayload(response);
-                this.listenFrom.removeEventListener("message", listener)
-                callback(response.payload.data, response.payload.transfer)
-            }
-        }
-        this.listenFrom.addEventListener("message", listener)
-    }
-
-    protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped {
-        return async (e: Event) => {
-            const request = unwrapMessage(e)
-            if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
-                // if metadata (no payload)
-                if (!request.payload) await this._injectPayload(request);
-                const payload = await handler(request.payload.data, request.payload.transfer)
-                const response = this.createResponse(request, payload)
-                await this._send(response)
-            }
         }
     }
 }
