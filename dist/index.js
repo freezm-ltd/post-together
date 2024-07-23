@@ -1,25 +1,42 @@
-// node_modules/.pnpm/@freezm-ltd+event-target-2@https+++codeload.github.com+freezm-ltd+EventTarget2+tar.gz+082e882_42iqhccuiyqwyz5j3pxwuadn7a/node_modules/@freezm-ltd/event-target-2/dist/index.js
+// node_modules/.pnpm/@freezm-ltd+event-target-2@https+++codeload.github.com+freezm-ltd+EventTarget2+tar.gz+ab35de5_waf2g56p5kfzme2plmhrbk5cai/node_modules/@freezm-ltd/event-target-2/dist/index.js
 var EventTarget2 = class extends EventTarget {
   constructor() {
     super(...arguments);
+    this.listeners = /* @__PURE__ */ new Map();
     this._bubbleMap = /* @__PURE__ */ new Map();
+    this.atomicQueue = /* @__PURE__ */ new Map();
   }
-  async waitFor(type) {
+  async waitFor(type, compareValue) {
     return new Promise((resolve) => {
-      this.addEventListener(type, resolve, { once: true });
+      if (compareValue !== void 0) {
+        this.listenOnceOnly(type, resolve, (e) => e.detail === compareValue);
+      } else {
+        this.listenOnce(type, resolve);
+      }
     });
   }
   callback(type, callback) {
     this.waitFor(type).then((result) => callback(result));
   }
   dispatch(type, detail) {
-    this.dispatchEvent(new CustomEvent(type, detail ? { detail } : void 0));
+    this.dispatchEvent(new CustomEvent(type, detail !== void 0 ? { detail } : void 0));
   }
   listen(type, callback, options) {
+    if (!this.listeners.has(type)) this.listeners.set(type, /* @__PURE__ */ new Set());
+    this.listeners.get(type).add(callback);
     this.addEventListener(type, callback, options);
   }
   remove(type, callback, options) {
+    if (!this.listeners.has(type)) this.listeners.set(type, /* @__PURE__ */ new Set());
+    this.listeners.get(type).delete(callback);
     this.removeEventListener(type, callback, options);
+  }
+  destroy() {
+    for (let type of this.listeners.keys()) {
+      for (let callback of this.listeners.get(type)) {
+        this.remove(type, callback);
+      }
+    }
   }
   listenOnce(type, callback) {
     this.listen(type, callback, { once: true });
@@ -79,6 +96,29 @@ var EventTarget2 = class extends EventTarget {
     const dispatcher = this._bubbleMap.get(type);
     this.remove(type, dispatcher);
     this._bubbleMap.delete(type);
+  }
+  _atomicInit(type) {
+    this.atomicQueue.set(type, []);
+    const atomicLoop = async () => {
+      const queue = this.atomicQueue.get(type);
+      while (true) {
+        const task = queue.shift();
+        if (task) {
+          await task();
+        } else {
+          await this.waitFor("__atomic-add", type);
+        }
+      }
+    };
+    atomicLoop();
+  }
+  atomic(type, func) {
+    return new Promise((resolve) => {
+      const wrap = async () => resolve(await func());
+      if (!this.atomicQueue.has(type)) this._atomicInit(type);
+      this.atomicQueue.get(type).push(wrap);
+      this.dispatch("__atomic-add", type);
+    });
   }
 };
 

@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@freezm-ltd/event-target-2':
         specifier: github:freezm-ltd/EventTarget2
-        version: https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/082e8822a5a35e5b19b33c3d1de183428b5731fe
+        version: https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/ab35de5293f7e053ae6dd1fe45f5bc5ea83266bd
     devDependencies:
       '@types/serviceworker':
         specifier: ^0.0.89
@@ -22,8 +22,8 @@ importers:
         specifier: ^2.6.3
         version: 2.6.3
       typescript:
-        specifier: ^5.5.3
-        version: 5.5.3
+        specifier: ^5.5.4
+        version: 5.5.4
 
 packages:
 
@@ -171,8 +171,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@freezm-ltd/event-target-2@https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/082e8822a5a35e5b19b33c3d1de183428b5731fe':
-    resolution: {tarball: https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/082e8822a5a35e5b19b33c3d1de183428b5731fe}
+  '@freezm-ltd/event-target-2@https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/ab35de5293f7e053ae6dd1fe45f5bc5ea83266bd':
+    resolution: {tarball: https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/ab35de5293f7e053ae6dd1fe45f5bc5ea83266bd}
     version: 0.0.4
 
   '@types/serviceworker@0.0.89':
@@ -186,8 +186,8 @@ packages:
   tslib@2.6.3:
     resolution: {integrity: sha512-xNvxJEOUiWPGhUuUdQgAJPKOOJfGnIyKySOc09XkKsgdUV/3E2zvwZYdejjmRgPCgcym1juLH3226yA7sEFJKQ==}
 
-  typescript@5.5.3:
-    resolution: {integrity: sha512-/hreyEujaB0w76zKo6717l3L0o/qEUtRgdvUBvlkhoWeOVMjMuHNHk0BRBzikzuGDqNmPQbg5ifMEqsHLiIUcQ==}
+  typescript@5.5.4:
+    resolution: {integrity: sha512-Mtq29sKDAEYP7aljRgtPOpTvOfbwRWlS6dPRzwjdE+C0R4brX/GUyhHSecbHMFLNBLcJIPt9nl9yG5TZ1weH+Q==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -265,7 +265,7 @@ snapshots:
   '@esbuild/win32-x64@0.23.0':
     optional: true
 
-  '@freezm-ltd/event-target-2@https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/082e8822a5a35e5b19b33c3d1de183428b5731fe': {}
+  '@freezm-ltd/event-target-2@https://codeload.github.com/freezm-ltd/EventTarget2/tar.gz/ab35de5293f7e053ae6dd1fe45f5bc5ea83266bd': {}
 
   '@types/serviceworker@0.0.89': {}
 
@@ -298,4 +298,4 @@ snapshots:
 
   tslib@2.6.3: {}
 
-  typescript@5.5.3: {}
+  typescript@5.5.4: {}
