@@ -288,9 +288,9 @@ var BroadcastChannelMessenger = class extends Messenger {
   }
   async _send(message) {
     if (message.transfer) {
-      const { payload, ...metadata } = message;
+      const { payload, transfer, ...metadata } = message;
       const result = await MessageHub.store(message);
-      if (!result) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
+      if (!result.ok) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
       this._getSendTo().postMessage(metadata);
     } else {
       this._getSendTo().postMessage(message);

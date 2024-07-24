@@ -26,24 +26,25 @@
             return MessageHub.addListen(worker)
         }
 
+
         window.test = async () => {
             await initWorker()
 
             const target = new BroadcastChannel("test")
             const messenger = MessengerFactory.new(target)
-
             const name = "post-together"
-            const transferables = [new ReadableStream(), new ArrayBuffer(100000000), (new MessageChannel()).port1]
-            
+            const transferables = [new ReadableStream(), new ArrayBuffer(1000), (new MessageChannel()).port1]
+
             // send request
-            const response = await messenger.request("test", { name, transferables }, transferables )
-            console.log(`response received:`, response)
+            const response = await messenger.request("test", { name, transferables }, transferables)
+            console.log(`response received:`, response.chat)
         }
     </script>
 </head>
 
 <body>
-    <p>This is cross-origin iframe to use MessageHub. Click <a href="https://github.com/freezm-ltd/post-together" target="_blank">here</a> to read more information.</p>
+    <p>This is cross-origin iframe to use MessageHub. Click <a href="https://github.com/freezm-ltd/post-together"
+            target="_blank">here</a> to read more information.</p>
 </body>
 
 </html>

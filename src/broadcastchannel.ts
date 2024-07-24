@@ -35,10 +35,10 @@ export class BroadcastChannelMessenger extends Messenger {
 
     protected async _send<T>(message: Message<T>): Promise<void> {
         if (message.transfer) {
-            const { payload, ...metadata } = message
+            const { payload, transfer, ...metadata } = message
             // store message
             const result = await MessageHub.store(message)
-            if (!result) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
+            if (!result.ok) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
             // send metadata only (without payload which includes transferables)
             this._getSendTo().postMessage(metadata)
         } else {
