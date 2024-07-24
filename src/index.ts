@@ -1,5 +1,5 @@
 import { BroadcastChannelMessenger } from "./broadcastchannel"
-import { MessageListenable, MessageSendable, Messenger, MessengerOption } from "./message"
+import { MessageListenable, MessageSendable, Messenger, MessengerOption, MessageHandler, MessageHandlerResult } from "./message"
 import { MessageHub } from "./broadcastchannel"
 
 export class MessengerFactory {
@@ -74,5 +74,6 @@ MessageHub.init()
 export {
     BroadcastChannelMessenger,
     Messenger,
-    MessageHub
+    MessageHub,
+    MessageHandler, MessageHandlerResult // types
 }

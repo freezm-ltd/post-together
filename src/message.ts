@@ -58,7 +58,7 @@ export class Messenger {
     // create response message from request message and payload
     protected createResponse<T, R>(request: Message<T>, payload: R, transfer?: Transferable[]): Message<R> {
         const { id, type, __identifier } = request
-        return { id, type, payload, __type: "response", __identifier }
+        return { id, type, payload, transfer, __type: "response", __identifier }
     }
 
     // inject informations to message

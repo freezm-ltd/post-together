@@ -1,11 +1,12 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2";
-import { IDENTIFIER, Message, MessageId, Messenger, MessengerOption } from "./message";
+import { IDENTIFIER, Message, MessageHandlerResult, MessageId, Messenger, MessengerOption } from "./message";
 import { MessengerFactory } from "src.ts";
 import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
 export const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/"
 const MessageHubCrossOriginIframeOrigin = (new URL(MessageHubCrossOriginIframeURL)).origin
 export function isIframe(origin?: string) {
+    return true
     if (globalThis.constructor === globalThis.Window) {
         if (!origin) origin = window.origin;
         return origin === MessageHubCrossOriginIframeOrigin
@@ -94,7 +95,11 @@ export abstract class AbstractMessageHub extends EventTarget2 {
         })
         // fetch message
         listenTarget.response(MessageFetchMessageType, async (id: MessageId) => {
-            return await this.fetch(id)
+            const result = await this.fetch(id)
+            if (result.ok) {
+                return { payload: result, transfer: result.message.transfer } as MessageHandlerResult<MessageFetchResponse<any>>
+            }
+            return result
         })
     }
 }

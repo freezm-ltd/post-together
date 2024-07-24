@@ -22,10 +22,13 @@
         function initWorker() {
             if (workerInit) return;
             workerInit = true
-            const worker = new Worker("./dedicated-worker.js", { type: "module" })
-            return MessageHub.addListen(worker)
-        }
-
+            return new Promise((resolve) => {
+                const loaded = new BroadcastChannel("loaded")
+                loaded.onmessage = resolve
+                const worker = new Worker("./dedicated-worker.js", { type: "module" })
+                MessageHub.addListen(worker)
+            })
+        };
 
         window.test = async () => {
             await initWorker()
@@ -37,7 +40,7 @@
 
             // send request
             const response = await messenger.request("test", { name, transferables }, transferables)
-            console.log(`response received:`, response.chat)
+            console.log(`response received:`, response.chat, response.transferables)
         }
     </script>
 </head>

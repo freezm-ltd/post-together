@@ -159,7 +159,7 @@ var Messenger = class {
   // create response message from request message and payload
   createResponse(request, payload, transfer) {
     const { id, type, __identifier } = request;
-    return { id, type, payload, __type: "response", __identifier };
+    return { id, type, payload, transfer, __type: "response", __identifier };
   }
   // inject informations to message
   async _inject(message) {
@@ -269,6 +269,7 @@ var CrossOriginWindowMessenger = class extends Messenger {
 var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 var MessageHubCrossOriginIframeOrigin = new URL(MessageHubCrossOriginIframeURL).origin;
 function isIframe(origin) {
+  return true;
   if (globalThis.constructor === globalThis.Window) {
     if (!origin) origin = window.origin;
     return origin === MessageHubCrossOriginIframeOrigin;
@@ -333,7 +334,11 @@ var AbstractMessageHub = class extends EventTarget2 {
       return await this.store(message);
     });
     listenTarget.response(MessageFetchMessageType, async (id) => {
-      return await this.fetch(id);
+      const result = await this.fetch(id);
+      if (result.ok) {
+        return { payload: result, transfer: result.message.transfer };
+      }
+      return result;
     });
   }
 };
