@@ -5,5 +5,5 @@ export declare class CrossOriginWindowMessenger extends Messenger {
     readonly sendToOrigin: string;
     constructor(listenFrom: Window, sendTo: Window, // if not specified, independent request is blocked, can do only responsing
     sendToOrigin: string);
-    protected _send(message: Message, event?: Event): Promise<void>;
+    protected _send<T>(message: Message<T>, event?: Event): Promise<void>;
 }

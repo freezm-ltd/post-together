@@ -1,7 +1,6 @@
 import { BroadcastChannelMessenger } from "./broadcastchannel"
 import { MessageListenable, MessageSendable, Messenger, MessengerOption } from "./message"
 import { MessageHub } from "./broadcastchannel"
-import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
 export class MessengerFactory {
     private constructor() { }

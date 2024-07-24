@@ -9,7 +9,7 @@ export class CrossOriginWindowMessenger extends Messenger {
         super(listenFrom, sendTo)
     }
 
-    protected async _send(message: Message, event?: Event) {
-        this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer, targetOrigin: this.sendToOrigin }) // send request
+    protected async _send<T>(message: Message<T>, event?: Event) {
+        this._getSendTo(event).postMessage(message, { transfer: message.transfer, targetOrigin: this.sendToOrigin }) // send request
     }
 }

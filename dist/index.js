@@ -152,12 +152,12 @@ var Messenger = class {
     this.listenerSet = /* @__PURE__ */ new Set();
   }
   // create request message from type and payload
-  createRequest(type, payload) {
+  createRequest(type, payload, transfer) {
     const id = generateId();
-    return { id, type, payload, __type: "request", __identifier: IDENTIFIER };
+    return { id, type, payload, transfer, __type: "request", __identifier: IDENTIFIER };
   }
   // create response message from request message and payload
-  createResponse(request, payload) {
+  createResponse(request, payload, transfer) {
     const { id, type, __identifier } = request;
     return { id, type, payload, __type: "response", __identifier };
   }
@@ -171,7 +171,7 @@ var Messenger = class {
       if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
         await this._inject(response);
         this.listenFrom.removeEventListener("message", listener);
-        callback(response.payload.data, response.payload.transfer);
+        callback(response.payload);
       }
     };
     this.listenFrom.addEventListener("message", listener);
@@ -187,15 +187,15 @@ var Messenger = class {
   }
   // send message
   async _send(message, event) {
-    const option = { transfer: message.payload.transfer };
+    const option = { transfer: message.transfer };
     if (isIframe()) Object.assign(option, { targetOrigin: "*" });
     this._getSendTo(event).postMessage(message, option);
   }
   // send message and get response
-  request(type, payload, timeout = 5e3) {
+  request(type, payload, transfer, timeout = 5e3) {
     return new Promise(async (resolve, reject) => {
-      const message = this.createRequest(type, payload);
-      const rejector = this.responseCallback(message, (data, transfer) => resolve({ data, transfer }));
+      const message = this.createRequest(type, payload, transfer);
+      const rejector = this.responseCallback(message, resolve);
       await this._send(message);
       setTimeout(() => {
         rejector();
@@ -208,8 +208,14 @@ var Messenger = class {
       const request = unwrapMessage(e);
       if (request && request.type === type && request.__type === "request" && this.activated) {
         await this._inject(request);
-        const payload = await handler(request.payload.data, request.payload.transfer);
-        const response = this.createResponse(request, payload);
+        const result = await handler(request.payload);
+        let response;
+        if (result instanceof Object && "payload" in result && "transfer" in result) {
+          const { payload, transfer } = result;
+          response = this.createResponse(request, payload, transfer);
+        } else {
+          response = this.createResponse(request, result);
+        }
         await this._send(response, e);
       }
     };
@@ -255,7 +261,7 @@ var CrossOriginWindowMessenger = class extends Messenger {
     this.sendToOrigin = sendToOrigin;
   }
   async _send(message, event) {
-    this._getSendTo(event).postMessage(message, { transfer: message.payload.transfer, targetOrigin: this.sendToOrigin });
+    this._getSendTo(event).postMessage(message, { transfer: message.transfer, targetOrigin: this.sendToOrigin });
   }
 };
 
@@ -275,15 +281,16 @@ var BroadcastChannelMessenger = class extends Messenger {
   async _inject(message) {
     if (message.payload) return;
     const { id } = message;
-    const payload = await MessageHub.fetch(id);
-    if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
-    message.payload = payload;
+    const response = await MessageHub.fetch(id);
+    if (!response.ok) throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
+    message.payload = response.message.payload;
+    message.transfer = response.message.transfer;
   }
   async _send(message) {
-    if (message.payload.transfer) {
+    if (message.transfer) {
       const { payload, ...metadata } = message;
-      const response = await MessageHub.store(message);
-      if (response.data !== "success") throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
+      const result = await MessageHub.store(message);
+      if (!result) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
       this._getSendTo().postMessage(metadata);
     } else {
       this._getSendTo().postMessage(message);
@@ -310,21 +317,11 @@ var AbstractMessageHub = class extends EventTarget2 {
   }
   async store(message) {
     await this.init();
-    const response = await this.target.request(MessageStoreMessageType, { data: message, transfer: message.payload.transfer });
-    if (response && response.data === "success") {
-      return response;
-    } else {
-      throw new Error("MessageHubStoreError: MessagHub returned corrupted or unsuccessful response.");
-    }
+    return await this.target.request(MessageStoreMessageType, message);
   }
   async fetch(id) {
     await this.init();
-    const response = await this.target.request(MessageFetchMessageType, { data: id });
-    if (response && response.data !== "error" && response.transfer) {
-      return response;
-    } else {
-      throw new Error("MessageHubFetchError: MessagHub returned corrupted or unsuccessful response.");
-    }
+    return await this.target.request(MessageFetchMessageType, id);
   }
   // listen request
   async addListen(listenFrom) {
@@ -332,11 +329,11 @@ var AbstractMessageHub = class extends EventTarget2 {
     if (this.listenFroms.has(listenFrom)) return;
     const listenTarget = MessengerFactory.new(listenFrom);
     this.listenFroms.add(listenFrom);
-    listenTarget.response(MessageStoreMessageType, async (data) => {
-      return await this.store(data);
+    listenTarget.response(MessageStoreMessageType, async (message) => {
+      return await this.store(message);
     });
-    listenTarget.response(MessageFetchMessageType, async (data) => {
-      return await this.fetch(data);
+    listenTarget.response(MessageFetchMessageType, async (id) => {
+      return await this.fetch(id);
     });
   }
 };
@@ -351,13 +348,18 @@ var ServiceWorkerMessageHub = class extends AbstractMessageHub {
   }
   // service worker is MessageHub storage itself
   async store(message) {
-    this.storage.set(message.id, message.payload);
-    return { data: "success" };
+    try {
+      this.storage.set(message.id, message);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e };
+    }
   }
   async fetch(id) {
-    let payload = this.storage.get(id);
-    if (!payload) return { data: "error" };
-    return payload;
+    let message = this.storage.get(id);
+    if (!message) return { ok: false, error: "Not Found" };
+    this.storage.delete(id);
+    return { ok: true, message };
   }
 };
 var DedicatedWorkerMessageHub = class extends AbstractMessageHub {

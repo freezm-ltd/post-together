@@ -1,5 +1,5 @@
 import { EventTarget2 } from "@freezm-ltd/event-target-2";
-import { IDENTIFIER, Message, MessageHandler, MessageId, Messenger, MessageType, unwrapMessage, MessageHandlerWrapped, MessagePayload, MessengerOption, MessageCallback } from "./message";
+import { IDENTIFIER, Message, MessageId, Messenger, MessengerOption } from "./message";
 import { MessengerFactory } from "src.ts";
 import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 
@@ -16,23 +16,29 @@ export function isIframe(origin?: string) {
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
 
+type MessageStoreRequest<T> = Message<T>
+type MessageStoreResponse = { ok: true } | { ok: false, error: unknown }
+type MessageFetchRequest = MessageId
+type MessageFetchResponse<T> = { ok: true, message: Message<T> } | { ok: false, error: unknown }
+
 export class BroadcastChannelMessenger extends Messenger {
-    protected async _inject(message: Message) { // inject payload to message(metadata only)
+    protected async _inject<T>(message: Message<T>) { // inject payload to message(metadata only)
         if (message.payload) return; // inject not required
         const { id } = message
         // fetch message payload
-        const payload = await MessageHub.fetch(id)
-        if (payload.data === "error") throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
+        const response = await MessageHub.fetch<T>(id)
+        if (!response.ok) throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
         // payload inject to message
-        message.payload = payload
+        message.payload = response.message.payload
+        message.transfer = response.message.transfer
     }
 
-    protected async _send(message: Message): Promise<void> {
-        if (message.payload.transfer) {
+    protected async _send<T>(message: Message<T>): Promise<void> {
+        if (message.transfer) {
             const { payload, ...metadata } = message
             // store message
-            const response = await MessageHub.store(message)
-            if (response.data !== "success") throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
+            const result = await MessageHub.store(message)
+            if (!result) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
             // send metadata only (without payload which includes transferables)
             this._getSendTo().postMessage(metadata)
         } else {
@@ -65,24 +71,14 @@ export abstract class AbstractMessageHub extends EventTarget2 {
 
     }
 
-    async store(message: Message): Promise<MessagePayload> {
+    async store<T = any>(message: Message<T>): Promise<MessageStoreResponse> {
         await this.init()
-        const response = await this.target!.request(MessageStoreMessageType, { data: message, transfer: message.payload.transfer })
-        if (response && response.data === "success") {
-            return response
-        } else {
-            throw new Error("MessageHubStoreError: MessagHub returned corrupted or unsuccessful response.");
-        }
+        return await this.target!.request<MessageStoreRequest<T>, MessageStoreResponse>(MessageStoreMessageType, message)
     }
 
-    async fetch(id: MessageId): Promise<MessagePayload> {
+    async fetch<T = any>(id: MessageId): Promise<MessageFetchResponse<T>> {
         await this.init()
-        const response = await this.target!.request(MessageFetchMessageType, { data: id })
-        if (response && response.data !== "error" && response.transfer) {
-            return response
-        } else {
-            throw new Error("MessageHubFetchError: MessagHub returned corrupted or unsuccessful response.");
-        }
+        return await this.target!.request<MessageFetchRequest, MessageFetchResponse<T>>(MessageFetchMessageType, id)
     }
 
     protected listenFroms: Set<MessengerOption> = new Set()
@@ -93,18 +89,18 @@ export abstract class AbstractMessageHub extends EventTarget2 {
         const listenTarget = MessengerFactory.new(listenFrom)
         this.listenFroms.add(listenFrom)
         // store message
-        listenTarget.response(MessageStoreMessageType, async (data: Message) => {
-            return await this.store(data)
+        listenTarget.response(MessageStoreMessageType, async (message: Message<any>) => {
+            return await this.store(message)
         })
         // fetch message
-        listenTarget.response(MessageFetchMessageType, async (data: string) => {
-            return await this.fetch(data)
+        listenTarget.response(MessageFetchMessageType, async (id: MessageId) => {
+            return await this.fetch(id)
         })
     }
 }
 
 class ServiceWorkerMessageHub extends AbstractMessageHub {
-    protected storage: Map<MessageId, MessagePayload> = new Map()
+    protected storage: Map<MessageId, Message<any>> = new Map()
 
     // add listen; requests from windows -> serviceworker
     async _init() {
@@ -112,15 +108,20 @@ class ServiceWorkerMessageHub extends AbstractMessageHub {
     }
 
     // service worker is MessageHub storage itself
-    async store(message: Message) {
-        this.storage.set(message.id, message.payload)
-        return { data: "success" }
+    async store<T = any>(message: Message<T>) {
+        try {
+            this.storage.set(message.id, message)
+            return { ok: true } as { ok: true }
+        } catch (e) {
+            return { ok: false, error: e }
+        }
     }
 
-    async fetch(id: MessageId) {
-        let payload = this.storage.get(id)
-        if (!payload) return { data: "error" };
-        return payload
+    async fetch<T>(id: MessageId) {
+        let message = this.storage.get(id)
+        if (!message) return { ok: false, error: "Not Found" } as { ok: false, error: unknown };
+        this.storage.delete(id)
+        return { ok: true, message } as { ok: true, message: Message<T> }
     }
 }
 
@@ -137,7 +138,7 @@ class WindowMessageHub extends AbstractMessageHub {
             setTimeout(() => { // throttle to block rapid and massive reloading loop
                 window.location.assign(window.location.href)
             }, 1000);
-            await new Promise(() => {}) // wait forever
+            await new Promise(() => { }) // wait forever
         } else { // can access service worker -> can use MessageHub
             this.target = MessengerFactory.new(globalThis.navigator.serviceWorker)
             window.parent.postMessage("loadend", { targetOrigin: "*" }) // loadend -> parent MessageHub initializing end
@@ -215,11 +216,11 @@ export class MessageHub {
         return MessageHub._instance
     }
 
-    static async store(message: Message): Promise<MessagePayload> {
+    static async store<T>(message: Message<T>): Promise<MessageStoreResponse> {
         return this.instance.hub!.store(message)
     }
 
-    static async fetch(id: MessageId): Promise<MessagePayload> {
+    static async fetch<T>(id: MessageId): Promise<MessageFetchResponse<T>> {
         return this.instance.hub!.fetch(id)
     }
 

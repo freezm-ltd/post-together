@@ -4,18 +4,15 @@ import { generateId } from "./utils"
 export const IDENTIFIER = "post-together"
 
 // message types
-export type Message = { id: MessageId, type: MessageType, payload: MessagePayload, __type: MessageInternalType, __identifier: typeof IDENTIFIER }
+export type Message<T> = { id: MessageId, type: MessageType, payload: T, transfer?: Transferable[], __type: MessageInternalType, __identifier: typeof IDENTIFIER }
 export function isMessage(data: any) {
     return data.id && data.type && data.__identifier === IDENTIFIER // check whether message should be processed
 }
-export type MessageCustomEvent = MessageEvent<Message>
+export type MessageCustomEvent<T> = MessageEvent<Message<T>>
 export type MessageType = string
 export type MessageInternalType = "request" | "response"
 export type MessageId = string // unique identifier for multiple messages
-export type MessagePayload = { data: MessagePayloadData, transfer?: MessagePayloadTransferable }
-export type MessagePayloadData = any
-export type MessagePayloadTransferable = Transferable[]
-export function isMessageCustomEvent(e: Event): e is MessageCustomEvent {
+export function isMessageCustomEvent<T>(e: Event): e is MessageCustomEvent<T> {
     return "data" in e && isMessage(e.data)
 }
 export function unwrapMessage(e: Event) {
@@ -25,9 +22,9 @@ export function unwrapMessage(e: Event) {
 }
 
 // message handler type
-export type MessageHandler = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => PromiseLike<MessagePayload> | MessagePayload
-export type MessageCallback = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => void
-export type MessageEventListener = (e: MessageCustomEvent) => any
+export type MessageHandlerResult<T> = T | { payload: T, transfer: Transferable[] }
+export type MessageHandler<T, R> = (payload: T) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>
+export type MessageEventListener<T> = (e: MessageCustomEvent<T>) => any
 export type MessageHandlerWrapped = (e: Event) => void
 
 // message target types
@@ -53,30 +50,30 @@ export class Messenger {
     ) { }
 
     // create request message from type and payload
-    protected createRequest(type: MessageType, payload: MessagePayload): Message {
+    protected createRequest<T>(type: MessageType, payload: T, transfer?: Transferable[]): Message<T> {
         const id = generateId()
-        return { id, type, payload, __type: "request", __identifier: IDENTIFIER }
+        return { id, type, payload, transfer, __type: "request", __identifier: IDENTIFIER }
     }
 
     // create response message from request message and payload
-    protected createResponse(request: Message, payload: MessagePayload): Message {
+    protected createResponse<T, R>(request: Message<T>, payload: R, transfer?: Transferable[]): Message<R> {
         const { id, type, __identifier } = request
         return { id, type, payload, __type: "response", __identifier }
     }
 
     // inject informations to message
-    protected async _inject(message: Message) {
+    protected async _inject<T>(message: Message<T>) {
         // nothing
     }
 
     // listen for response
-    protected responseCallback(request: Message, callback: MessageCallback): () => void {
+    protected responseCallback<T, R>(request: Message<T>, callback: (payload: R) => void): () => void {
         const listener = async (e: Event) => {
-            const response = unwrapMessage(e)
+            const response = unwrapMessage(e) // unwrap and check response
             if (response && response.id === request.id && response.type === request.type && response.__type === "response") {
                 await this._inject(response); // inject if need
                 this.listenFrom.removeEventListener("message", listener)
-                callback(response.payload.data, response.payload.transfer)
+                callback(response.payload as R)
             }
         }
         this.listenFrom.addEventListener("message", listener)
@@ -93,17 +90,17 @@ export class Messenger {
     }
 
     // send message
-    protected async _send(message: Message, event?: Event) {
-        const option = { transfer: message.payload.transfer }
+    protected async _send<T>(message: Message<T>, event?: Event) {
+        const option = { transfer: message.transfer }
         if (isIframe()) Object.assign(option, { targetOrigin: "*" });
         this._getSendTo(event).postMessage(message, option) // send request
     }
 
     // send message and get response
-    request(type: MessageType, payload: MessagePayload, timeout: number = 5000): Promise<MessagePayload> {
+    request<T, R>(type: MessageType, payload: T, transfer?: Transferable[], timeout: number = 5000): Promise<R> {
         return new Promise(async (resolve, reject) => {
-            const message = this.createRequest(type, payload)
-            const rejector = this.responseCallback(message, (data, transfer) => resolve({ data, transfer })) // listen for response
+            const message = this.createRequest<T>(type, payload, transfer)
+            const rejector = this.responseCallback<T, R>(message, resolve) // listen for response
             await this._send(message) // send request
             setTimeout(() => {
                 rejector() // remove event listener
@@ -113,22 +110,28 @@ export class Messenger {
     }
 
     // wrap message handler (request -> response)
-    protected listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped> = new WeakMap()
-    protected listenerSet: Set<MessageHandler> = new Set()
-    protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped {
+    protected listenerWeakMap: WeakMap<MessageHandler<any, any>, MessageHandlerWrapped> = new WeakMap()
+    protected listenerSet: Set<MessageHandler<any, any>> = new Set()
+    protected wrapMessageHandler<T, R>(type: MessageType, handler: MessageHandler<T, R>): MessageHandlerWrapped {
         return async (e: Event) => {
             const request = unwrapMessage(e)
             if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
                 await this._inject(request); // inject if need
-                const payload = await handler(request.payload.data, request.payload.transfer)
-                const response = this.createResponse(request, payload)
+                const result = await handler(request.payload as T) as MessageHandlerResult<R>
+                let response: Message<R>
+                if (result instanceof Object && "payload" in result && "transfer" in result) {
+                    const { payload, transfer } = result // parse if transfer exists
+                    response = this.createResponse(request, payload, transfer)
+                } else {
+                    response = this.createResponse(request, result)
+                }
                 await this._send(response, e)
             }
         }
     }
 
     // get request and give response
-    response(type: MessageType, handler: MessageHandler) {
+    response<T, R>(type: MessageType, handler: MessageHandler<T, R>) {
         if (this.listenerSet.has(handler)) throw new Error("MessengerAddEventListenerError: this message handler already attached");
         const wrapped = this.wrapMessageHandler(type, handler)
         this.listenerWeakMap.set(handler, wrapped)
@@ -137,7 +140,7 @@ export class Messenger {
     }
 
     // remove response handler
-    deresponse(handler?: MessageHandler) {
+    deresponse(handler?: MessageHandler<any, any>) {
         const iterator = handler ? [handler] : this.listenerSet
         for (let handler of iterator) {
             const wrapped = this.listenerWeakMap.get(handler)

@@ -1,27 +1,25 @@
 export declare const IDENTIFIER = "post-together";
-export type Message = {
+export type Message<T> = {
     id: MessageId;
     type: MessageType;
-    payload: MessagePayload;
+    payload: T;
+    transfer?: Transferable[];
     __type: MessageInternalType;
     __identifier: typeof IDENTIFIER;
 };
 export declare function isMessage(data: any): any;
-export type MessageCustomEvent = MessageEvent<Message>;
+export type MessageCustomEvent<T> = MessageEvent<Message<T>>;
 export type MessageType = string;
 export type MessageInternalType = "request" | "response";
 export type MessageId = string;
-export type MessagePayload = {
-    data: MessagePayloadData;
-    transfer?: MessagePayloadTransferable;
+export declare function isMessageCustomEvent<T>(e: Event): e is MessageCustomEvent<T>;
+export declare function unwrapMessage(e: Event): Message<unknown> | undefined;
+export type MessageHandlerResult<T> = T | {
+    payload: T;
+    transfer: Transferable[];
 };
-export type MessagePayloadData = any;
-export type MessagePayloadTransferable = Transferable[];
-export declare function isMessageCustomEvent(e: Event): e is MessageCustomEvent;
-export declare function unwrapMessage(e: Event): Message | undefined;
-export type MessageHandler = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => PromiseLike<MessagePayload> | MessagePayload;
-export type MessageCallback = (data: MessagePayloadData, transfer?: MessagePayloadTransferable) => void;
-export type MessageEventListener = (e: MessageCustomEvent) => any;
+export type MessageHandler<T, R> = (payload: T) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>;
+export type MessageEventListener<T> = (e: MessageCustomEvent<T>) => any;
 export type MessageHandlerWrapped = (e: Event) => void;
 export type MessengerOption = ServiceWorker | ServiceWorkerContainer | ServiceWorkerGlobalScope | Worker | DedicatedWorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort;
 export type MessageSendable = ServiceWorker | Worker | DedicatedWorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort;
@@ -33,18 +31,18 @@ export declare class Messenger {
     readonly sendTo?: MessageSendable | undefined;
     protected activated: boolean;
     constructor(listenFrom: MessageListenable, sendTo?: MessageSendable | undefined);
-    protected createRequest(type: MessageType, payload: MessagePayload): Message;
-    protected createResponse(request: Message, payload: MessagePayload): Message;
-    protected _inject(message: Message): Promise<void>;
-    protected responseCallback(request: Message, callback: MessageCallback): () => void;
+    protected createRequest<T>(type: MessageType, payload: T, transfer?: Transferable[]): Message<T>;
+    protected createResponse<T, R>(request: Message<T>, payload: R, transfer?: Transferable[]): Message<R>;
+    protected _inject<T>(message: Message<T>): Promise<void>;
+    protected responseCallback<T, R>(request: Message<T>, callback: (payload: R) => void): () => void;
     protected _getSendTo(event?: Event): MessageSendable;
-    protected _send(message: Message, event?: Event): Promise<void>;
-    request(type: MessageType, payload: MessagePayload, timeout?: number): Promise<MessagePayload>;
-    protected listenerWeakMap: WeakMap<MessageHandler, MessageHandlerWrapped>;
-    protected listenerSet: Set<MessageHandler>;
-    protected wrapMessageHandler(type: MessageType, handler: MessageHandler): MessageHandlerWrapped;
-    response(type: MessageType, handler: MessageHandler): void;
-    deresponse(handler?: MessageHandler): void;
+    protected _send<T>(message: Message<T>, event?: Event): Promise<void>;
+    request<T, R>(type: MessageType, payload: T, transfer?: Transferable[], timeout?: number): Promise<R>;
+    protected listenerWeakMap: WeakMap<MessageHandler<any, any>, MessageHandlerWrapped>;
+    protected listenerSet: Set<MessageHandler<any, any>>;
+    protected wrapMessageHandler<T, R>(type: MessageType, handler: MessageHandler<T, R>): MessageHandlerWrapped;
+    response<T, R>(type: MessageType, handler: MessageHandler<T, R>): void;
+    deresponse(handler?: MessageHandler<any, any>): void;
     activate(): void;
     deactivate(): void;
 }
