@@ -36,7 +36,7 @@
             const transferables = [new ReadableStream(), new ArrayBuffer(100000000), (new MessageChannel()).port1]
             
             // send request
-            const response = await messenger.request("test", { data: { name, transferables }, transfer: transferables })
+            const response = await messenger.request("test", { name, transferables }, transferables )
             console.log(`response received:`, response)
         }
     </script>

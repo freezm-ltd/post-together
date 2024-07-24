@@ -73,7 +73,7 @@ export abstract class AbstractMessageHub extends EventTarget2 {
 
     async store<T = any>(message: Message<T>): Promise<MessageStoreResponse> {
         await this.init()
-        return await this.target!.request<MessageStoreRequest<T>, MessageStoreResponse>(MessageStoreMessageType, message)
+        return await this.target!.request<MessageStoreRequest<T>, MessageStoreResponse>(MessageStoreMessageType, message, message.transfer)
     }
 
     async fetch<T = any>(id: MessageId): Promise<MessageFetchResponse<T>> {

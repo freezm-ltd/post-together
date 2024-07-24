@@ -317,7 +317,7 @@ var AbstractMessageHub = class extends EventTarget2 {
   }
   async store(message) {
     await this.init();
-    return await this.target.request(MessageStoreMessageType, message);
+    return await this.target.request(MessageStoreMessageType, message, message.transfer);
   }
   async fetch(id) {
     await this.init();
