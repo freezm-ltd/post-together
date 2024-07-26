@@ -1,4 +1,4 @@
-// node_modules/.pnpm/@freezm-ltd+event-target-2@https+++codeload.github.com+freezm-ltd+EventTarget2+tar.gz+ab35de5_waf2g56p5kfzme2plmhrbk5cai/node_modules/@freezm-ltd/event-target-2/dist/index.js
+// node_modules/.pnpm/@freezm-ltd+event-target-2@https+++codeload.github.com+freezm-ltd+EventTarget2+tar.gz+11ff208_3njyjyppej5icdv7ro2urw6f3a/node_modules/@freezm-ltd/event-target-2/dist/index.js
 var EventTarget2 = class extends EventTarget {
   constructor() {
     super(...arguments);
@@ -9,14 +9,14 @@ var EventTarget2 = class extends EventTarget {
   async waitFor(type, compareValue) {
     return new Promise((resolve) => {
       if (compareValue !== void 0) {
-        this.listenOnceOnly(type, resolve, (e) => e.detail === compareValue);
+        this.listenOnceOnly(type, (e) => resolve(e.detail), (e) => e.detail === compareValue);
       } else {
-        this.listenOnce(type, resolve);
+        this.listenOnce(type, (e) => resolve(e.detail));
       }
     });
   }
   callback(type, callback) {
-    this.waitFor(type).then((result) => callback(result));
+    this.waitFor(type).then(callback);
   }
   dispatch(type, detail) {
     this.dispatchEvent(new CustomEvent(type, detail !== void 0 ? { detail } : void 0));
@@ -269,7 +269,6 @@ var CrossOriginWindowMessenger = class extends Messenger {
 var MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/";
 var MessageHubCrossOriginIframeOrigin = new URL(MessageHubCrossOriginIframeURL).origin;
 function isIframe(origin) {
-  return true;
   if (globalThis.constructor === globalThis.Window) {
     if (!origin) origin = window.origin;
     return origin === MessageHubCrossOriginIframeOrigin;

@@ -6,7 +6,6 @@ import { CrossOriginWindowMessenger } from "./crossoriginwindow";
 export const MessageHubCrossOriginIframeURL = "https://freezm-ltd.github.io/post-together/iframe/"
 const MessageHubCrossOriginIframeOrigin = (new URL(MessageHubCrossOriginIframeURL)).origin
 export function isIframe(origin?: string) {
-    return true
     if (globalThis.constructor === globalThis.Window) {
         if (!origin) origin = window.origin;
         return origin === MessageHubCrossOriginIframeOrigin
