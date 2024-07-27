@@ -279,7 +279,7 @@ var MessageStoreMessageType = `${IDENTIFIER}:__store`;
 var MessageFetchMessageType = `${IDENTIFIER}:__fetch`;
 var BroadcastChannelMessenger = class extends Messenger {
   async _inject(message) {
-    if (message.payload) return;
+    if (!("metadata" in message)) return;
     const { id } = message;
     const response = await MessageHub.fetch(id);
     if (!response.ok) throw new Error("BroadcastChannelMessengerFetchPayloadError: MessageHub fetch failed.");
@@ -291,6 +291,7 @@ var BroadcastChannelMessenger = class extends Messenger {
       const { payload, transfer, ...metadata } = message;
       const result = await MessageHub.store(message);
       if (!result.ok) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
+      Object.assign(metadata, { metadata: true });
       this._getSendTo().postMessage(metadata);
     } else {
       this._getSendTo().postMessage(message);

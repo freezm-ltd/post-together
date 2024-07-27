@@ -16,14 +16,15 @@ export function isIframe(origin?: string) {
 const MessageStoreMessageType = `${IDENTIFIER}:__store`
 const MessageFetchMessageType = `${IDENTIFIER}:__fetch`
 
+type MessageMetadata<T> = Message<T> & { metadata: true }
 type MessageStoreRequest<T> = Message<T>
 type MessageStoreResponse = { ok: true } | { ok: false, error: unknown }
 type MessageFetchRequest = MessageId
 type MessageFetchResponse<T> = { ok: true, message: Message<T> } | { ok: false, error: unknown }
 
 export class BroadcastChannelMessenger extends Messenger {
-    protected async _inject<T>(message: Message<T>) { // inject payload to message(metadata only)
-        if (message.payload) return; // inject not required
+    protected async _inject<T>(message: Message<T> | MessageMetadata<T>) { // inject payload to message(metadata only)
+        if (!("metadata" in message)) return; // inject not required
         const { id } = message
         // fetch message payload
         const response = await MessageHub.fetch<T>(id)
@@ -40,6 +41,7 @@ export class BroadcastChannelMessenger extends Messenger {
             const result = await MessageHub.store(message)
             if (!result.ok) throw new Error("BroadcastChannelMessengerSendError: MessageHub store failed.");
             // send metadata only (without payload which includes transferables)
+            Object.assign(metadata, { metadata: true })
             this._getSendTo().postMessage(metadata)
         } else {
             this._getSendTo().postMessage(message) // without payload, send normally
