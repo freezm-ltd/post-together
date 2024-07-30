@@ -23,7 +23,7 @@ export function unwrapMessage(e: Event) {
 
 // message handler type
 export type MessageHandlerResult<T> = T | { payload: T, transfer: Transferable[] }
-export type MessageHandler<T, R> = (payload: T) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>
+export type MessageHandler<T, R> = (payload: T, e: MessageCustomEvent<T>) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>
 export type MessageEventListener<T> = (e: MessageCustomEvent<T>) => any
 export type MessageHandlerWrapped = (e: Event) => void
 
@@ -117,7 +117,7 @@ export class Messenger {
             const request = unwrapMessage(e)
             if (request && request.type === type && request.__type === "request" && this.activated) { // type and activation check
                 await this._inject(request); // inject if need
-                const result = await handler(request.payload as T) as MessageHandlerResult<R>
+                const result = await handler(request.payload as T, e as MessageCustomEvent<T>) as MessageHandlerResult<R>
                 let response: Message<R>
                 if (result instanceof Object && "payload" in result && "transfer" in result) {
                     const { payload, transfer } = result // parse if transfer exists

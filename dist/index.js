@@ -208,7 +208,7 @@ var Messenger = class {
       const request = unwrapMessage(e);
       if (request && request.type === type && request.__type === "request" && this.activated) {
         await this._inject(request);
-        const result = await handler(request.payload);
+        const result = await handler(request.payload, e);
         let response;
         if (result instanceof Object && "payload" in result && "transfer" in result) {
           const { payload, transfer } = result;
