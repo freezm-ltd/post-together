@@ -23,7 +23,7 @@ export function unwrapMessage(e: Event) {
 
 // message handler type
 export type MessageHandlerResult<T> = T | { payload: T, transfer: Transferable[] }
-export type MessageHandler<T, R> = (payload: T, e: MessageCustomEvent<T>) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>
+export type MessageHandler<T, R> = (payload: T, e?: MessageCustomEvent<T>) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>
 export type MessageEventListener<T> = (e: MessageCustomEvent<T>) => any
 export type MessageHandlerWrapped = (e: Event) => void
 

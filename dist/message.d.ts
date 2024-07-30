@@ -18,7 +18,7 @@ export type MessageHandlerResult<T> = T | {
     payload: T;
     transfer: Transferable[];
 };
-export type MessageHandler<T, R> = (payload: T, e: MessageCustomEvent<T>) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>;
+export type MessageHandler<T, R> = (payload: T, e?: MessageCustomEvent<T>) => PromiseLike<MessageHandlerResult<R>> | MessageHandlerResult<R>;
 export type MessageEventListener<T> = (e: MessageCustomEvent<T>) => any;
 export type MessageHandlerWrapped = (e: Event) => void;
 export type MessengerOption = ServiceWorker | ServiceWorkerContainer | ServiceWorkerGlobalScope | Worker | DedicatedWorkerGlobalScope | Window | Client | BroadcastChannel | MessagePort;
