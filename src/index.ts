@@ -45,7 +45,8 @@ export class MessengerFactory {
                 send = targetWindow // target window
                 break
             }
-            case globalThis.Client: {
+            case globalThis.Client:
+            case globalThis.WindowClient: {
                 listen = self as DedicatedWorkerGlobalScope // listen itself
                 send = option as Client
                 break

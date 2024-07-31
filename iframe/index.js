@@ -486,7 +486,8 @@ var MessengerFactory = class {
         send = targetWindow;
         break;
       }
-      case globalThis.Client: {
+      case globalThis.Client:
+      case globalThis.WindowClient: {
         listen = self;
         send = option;
         break;
