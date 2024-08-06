@@ -55,12 +55,12 @@ export abstract class AbstractMessageHub extends EventTarget2 {
     protected target: Messenger | undefined // message store/fetch request target
     state: "off" | "initializing" | "on" = "off"
 
-    constructor() {
+    constructor(option?: MessageHubInitOption) {
         super()
-        this.init()
+        this.init(option)
     }
 
-    private async init() {
+    private async init(option?: MessageHubInitOption) {
         if (this.state === "on") return;
         if (this.state === "initializing") return await this.waitFor("done");
         this.state = "initializing"
@@ -172,10 +172,10 @@ class WindowMessageHub extends AbstractMessageHub {
     }
 
     // worker/window -> window -> iframe/serviceworker -> window -> worker/window
-    async _init() {
+    async _init(option: MessageHubInitOption = { iframe: false }) {
         // window -> service worker(same-origin)
         // block same-origin MessageHub just for now, for stableness
-        if (isIframe()) await this._initSameOrigin();
+        if (!option.iframe || isIframe()) await this._initSameOrigin();
         // window -> iframe(cross-origin) (-> service worker(cross-origin))
         else await this._initCrossOrigin()
         // add forward requests from other window -> this window
@@ -188,33 +188,37 @@ class WindowMessageHub extends AbstractMessageHub {
     }
 }
 
+export type MessageHubInitOption = {
+    iframe: boolean
+}
+
 // singleton
 export class MessageHub {
     private static _instance: MessageHub
     private hub?: AbstractMessageHub
 
-    private constructor() {
-        this.changeHub()
+    private constructor(option?: MessageHubInitOption) {
+        this.changeHub(option)
     }
 
-    changeHub() {
+    changeHub(option?: MessageHubInitOption) {
         switch (globalThis.constructor) {
             case globalThis.ServiceWorkerGlobalScope:
-                this.hub = new ServiceWorkerMessageHub()
+                this.hub = new ServiceWorkerMessageHub(option)
                 break
             case globalThis.Window:
-                this.hub = new WindowMessageHub()
+                this.hub = new WindowMessageHub(option)
                 break
             case globalThis.DedicatedWorkerGlobalScope:
-                this.hub = new DedicatedWorkerMessageHub()
+                this.hub = new DedicatedWorkerMessageHub(option)
                 break
             default:
                 throw new Error("MessageHubConstructError: Cannot create MessageHub instance in this scope.")
         }
     }
 
-    static init() {
-        if (!MessageHub._instance) MessageHub._instance = new MessageHub();
+    static init(option?: MessageHubInitOption) {
+        if (!MessageHub._instance) MessageHub._instance = new MessageHub(option);
     }
 
     static get instance() {

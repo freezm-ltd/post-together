@@ -299,14 +299,14 @@ var BroadcastChannelMessenger = class extends Messenger {
   }
 };
 var AbstractMessageHub = class extends EventTarget2 {
-  constructor() {
+  constructor(option) {
     super();
     // message store/fetch request target
     this.state = "off";
     this.listenFroms = /* @__PURE__ */ new Set();
-    this.init();
+    this.init(option);
   }
-  async init() {
+  async init(option) {
     if (this.state === "on") return;
     if (this.state === "initializing") return await this.waitFor("done");
     this.state = "initializing";
@@ -404,33 +404,33 @@ var WindowMessageHub = class extends AbstractMessageHub {
     this.target = new CrossOriginWindowMessenger(window, iframe.contentWindow, MessageHubCrossOriginIframeOrigin);
   }
   // worker/window -> window -> iframe/serviceworker -> window -> worker/window
-  async _init() {
-    if (isIframe()) await this._initSameOrigin();
+  async _init(option = { iframe: false }) {
+    if (!option.iframe || isIframe()) await this._initSameOrigin();
     else await this._initCrossOrigin();
     this.addListen(window);
   }
 };
 var MessageHub = class _MessageHub {
-  constructor() {
-    this.changeHub();
+  constructor(option) {
+    this.changeHub(option);
   }
-  changeHub() {
+  changeHub(option) {
     switch (globalThis.constructor) {
       case globalThis.ServiceWorkerGlobalScope:
-        this.hub = new ServiceWorkerMessageHub();
+        this.hub = new ServiceWorkerMessageHub(option);
         break;
       case globalThis.Window:
-        this.hub = new WindowMessageHub();
+        this.hub = new WindowMessageHub(option);
         break;
       case globalThis.DedicatedWorkerGlobalScope:
-        this.hub = new DedicatedWorkerMessageHub();
+        this.hub = new DedicatedWorkerMessageHub(option);
         break;
       default:
         throw new Error("MessageHubConstructError: Cannot create MessageHub instance in this scope.");
     }
   }
-  static init() {
-    if (!_MessageHub._instance) _MessageHub._instance = new _MessageHub();
+  static init(option) {
+    if (!_MessageHub._instance) _MessageHub._instance = new _MessageHub(option);
   }
   static get instance() {
     this.init();

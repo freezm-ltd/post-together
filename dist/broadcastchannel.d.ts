@@ -25,7 +25,7 @@ export declare class BroadcastChannelMessenger extends Messenger {
 export declare abstract class AbstractMessageHub extends EventTarget2 {
     protected target: Messenger | undefined;
     state: "off" | "initializing" | "on";
-    constructor();
+    constructor(option?: MessageHubInitOption);
     private init;
     protected _init(): Promise<void>;
     store<T = any>(message: Message<T>): Promise<MessageStoreResponse>;
@@ -33,12 +33,15 @@ export declare abstract class AbstractMessageHub extends EventTarget2 {
     protected listenFroms: Set<MessengerOption>;
     addListen(listenFrom: MessengerOption): Promise<void>;
 }
+export type MessageHubInitOption = {
+    iframe: boolean;
+};
 export declare class MessageHub {
     private static _instance;
     private hub?;
     private constructor();
-    changeHub(): void;
-    static init(): void;
+    changeHub(option?: MessageHubInitOption): void;
+    static init(option?: MessageHubInitOption): void;
     static get instance(): MessageHub;
     static store<T>(message: Message<T>): Promise<MessageStoreResponse>;
     static fetch<T>(id: MessageId): Promise<MessageFetchResponse<T>>;
