@@ -69,9 +69,6 @@ export class MessengerFactory {
     }
 }
 
-// automatic init MessageHub
-MessageHub.init()
-
 export {
     BroadcastChannelMessenger,
     Messenger,

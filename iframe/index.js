@@ -508,7 +508,6 @@ var MessengerFactory = class {
     }
   }
 };
-MessageHub.init();
 export {
   BroadcastChannelMessenger,
   MessageHub,
