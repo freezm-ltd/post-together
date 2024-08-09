@@ -197,10 +197,12 @@ var Messenger = class {
       const message = this.createRequest(type, payload, transfer);
       const rejector = this.responseCallback(message, resolve);
       await this._send(message);
-      setTimeout(() => {
-        rejector();
-        reject(`MessengerRequestTimeoutError: request timeout reached: ${timeout}ms`);
-      }, timeout);
+      if (timeout > 0) {
+        setTimeout(() => {
+          rejector();
+          reject(`MessengerRequestTimeoutError: request timeout reached: ${timeout}ms`);
+        }, timeout);
+      }
     });
   }
   wrapMessageHandler(type, handler) {

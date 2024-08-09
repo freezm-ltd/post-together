@@ -102,10 +102,12 @@ export class Messenger {
             const message = this.createRequest<T>(type, payload, transfer)
             const rejector = this.responseCallback<T, R>(message, resolve) // listen for response
             await this._send(message) // send request
-            setTimeout(() => {
-                rejector() // remove event listener
-                reject(`MessengerRequestTimeoutError: request timeout reached: ${timeout}ms`)
-            }, timeout); // set timeout
+            if (timeout > 0) {
+                setTimeout(() => {
+                    rejector() // remove event listener
+                    reject(`MessengerRequestTimeoutError: request timeout reached: ${timeout}ms`)
+                }, timeout); // set timeout
+            }
         })
     }
 
