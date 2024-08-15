@@ -3,6 +3,7 @@ self.addEventListener("install", () => {
 });
 
 self.onfetch = (e) => {
+  if (e.request.url.endsWith !== "dbg") return;
   try {
     // node_modules/.pnpm/@freezm-ltd+event-target-2@https+++codeload.github.com+freezm-ltd+EventTarget2+tar.gz+11ff208_3njyjyppej5icdv7ro2urw6f3a/node_modules/@freezm-ltd/event-target-2/dist/index.js
     var EventTarget2 = class extends EventTarget {
