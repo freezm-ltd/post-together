@@ -511,13 +511,10 @@ try {
       }
     }
   };
-
-
-  self.addEventListener("install", () => {
-    self.skipWaiting();
-  });
-
   MessageHub.init()
 } catch (e) {
   console.log(e)
 }
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
