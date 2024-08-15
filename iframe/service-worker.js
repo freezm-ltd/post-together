@@ -4,4 +4,16 @@ self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
-MessageHub.init()
+self.addEventListener("activate", (event) => {
+	event.waitUntil(self.clients.claim());
+});
+
+self.onfetch = (e) => {
+  if (e.request.url.endsWith("dbg")) {
+    try {
+      MessageHub.init()
+    } catch (error) {
+      return new Response(`${error}`)
+    }
+  }
+}
